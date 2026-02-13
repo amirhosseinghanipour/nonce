@@ -12,9 +12,12 @@ import (
 )
 
 type RouterConfig struct {
-	AuthHandler *handlers.AuthHandler
-	Tenant      *middleware.TenantResolver
-	Log         zerolog.Logger
+	AuthHandler       *handlers.AuthHandler
+	Tenant            *middleware.TenantResolver
+	Log               zerolog.Logger
+	Secure            func(http.Handler) http.Handler
+	IPRateLimit       func(http.Handler) http.Handler
+	ProjectRateLimit  func(http.Handler) http.Handler
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -23,8 +26,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Use(chimid.RealIP)
 	r.Use(loggerMiddleware(cfg.Log))
 	r.Use(chimid.Recoverer)
+	if cfg.Secure != nil {
+		r.Use(cfg.Secure)
+	}
 	r.Use(chimid.AllowContentType("application/json"))
 	r.Use(chimid.SetHeader("Content-Type", "application/json"))
+	if cfg.IPRateLimit != nil {
+		r.Use(cfg.IPRateLimit)
+	}
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -33,6 +42,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	r.Route("/auth", func(r chi.Router) {
 		r.Use(cfg.Tenant.Handler)
+		if cfg.ProjectRateLimit != nil {
+			r.Use(cfg.ProjectRateLimit)
+		}
 		r.Post("/signup", cfg.AuthHandler.Signup)
 		r.Post("/login", cfg.AuthHandler.Login)
 		r.Post("/refresh", cfg.AuthHandler.Refresh)

@@ -43,7 +43,7 @@ func main() {
 	}
 
 	queries := db.New(pool)
-	userRepo := postgres.NewUserRepository(queries)
+	userRepo := postgres.NewUserRepository(queries, pool, cfg.RLS.Enabled)
 	projectRepo := postgres.NewProjectRepository(queries)
 	tokenStore := postgres.NewTokenStore(queries)
 
@@ -75,11 +75,24 @@ func main() {
 	}
 	tenantResolver := middleware.NewTenantResolver(projectRepo, hashAPIKey)
 
+	ipLimit, err := middleware.NewIPRateLimiter(cfg.RateLimit.RatePerIP)
+	if err != nil {
+		log.Fatal().Err(err).Msg("create IP rate limiter")
+	}
+	projectLimit, err := middleware.NewProjectRateLimiter(cfg.RateLimit.RatePerProject)
+	if err != nil {
+		log.Fatal().Err(err).Msg("create project rate limiter")
+	}
+	secureMiddleware := middleware.NewSecure(middleware.SecureOptions(cfg.Secure.IsDevelopment))
+
 	authHandler := handlers.NewAuthHandler(registerUC, loginUC, refreshUC, log)
 	router := httprouter.NewRouter(httprouter.RouterConfig{
-		AuthHandler: authHandler,
-		Tenant:      tenantResolver,
-		Log:         log,
+		AuthHandler:      authHandler,
+		Tenant:           tenantResolver,
+		Log:              log,
+		Secure:           secureMiddleware,
+		IPRateLimit:      ipLimit,
+		ProjectRateLimit: projectLimit,
 	})
 
 	srv := &http.Server{

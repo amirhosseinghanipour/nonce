@@ -37,8 +37,8 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Email    string `json:"email" validate:"required,email"`
-		Password string `json:"password" validate:"required,min=8"`
+		Email    string `json:"email" validate:"required,email,max=254"`
+		Password string `json:"password" validate:"required,min=8,max=128"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
@@ -48,12 +48,19 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	email := SanitizeEmail(body.Email)
+	password := SanitizePassword(body.Password)
+	if email == "" || password == "" {
+		writeErr(w, http.StatusBadRequest, "invalid email or password length")
+		return
+	}
 	result, err := h.register.Execute(r.Context(), auth.RegisterUserInput{
 		ProjectID: project.ID,
-		Email:     body.Email,
-		Password:  body.Password,
+		Email:     email,
+		Password:  password,
 	})
 	if err != nil {
+		AuditLog(h.log, r, "user.signup", project.ID.String(), "", false, err.Error())
 		if err == domerrors.ErrUserExists {
 			writeErr(w, http.StatusConflict, err.Error())
 			return
@@ -62,6 +69,7 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	AuditLog(h.log, r, "user.signup", project.ID.String(), result.User.ID.String(), true, "")
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"id":         result.User.ID.String(),
 		"project_id": result.User.ProjectID.String(),
@@ -77,8 +85,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Email    string `json:"email" validate:"required,email"`
-		Password string `json:"password" validate:"required"`
+		Email    string `json:"email" validate:"required,email,max=254"`
+		Password string `json:"password" validate:"required,max=128"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
@@ -88,12 +96,19 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	email := SanitizeEmail(body.Email)
+	password := SanitizePassword(body.Password)
+	if email == "" || password == "" {
+		writeErr(w, http.StatusBadRequest, "invalid email or password length")
+		return
+	}
 	result, err := h.login.Execute(r.Context(), auth.LoginInput{
 		ProjectID: project.ID,
-		Email:     body.Email,
-		Password:  body.Password,
+		Email:     email,
+		Password:  password,
 	})
 	if err != nil {
+		AuditLog(h.log, r, "user.login", project.ID.String(), "", false, err.Error())
 		if err == domerrors.ErrInvalidCredentials {
 			writeErr(w, http.StatusUnauthorized, err.Error())
 			return
@@ -102,6 +117,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	AuditLog(h.log, r, "user.login", project.ID.String(), result.User.ID.String(), true, "")
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"access_token":  result.AccessToken,
 		"refresh_token": result.RefreshToken,
@@ -115,7 +131,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		RefreshToken string `json:"refresh_token" validate:"required"`
+		RefreshToken string `json:"refresh_token" validate:"required,max=1024"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
@@ -127,6 +143,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.refresh.Execute(r.Context(), auth.RefreshInput{RefreshToken: body.RefreshToken})
 	if err != nil {
+		AuditLog(h.log, r, "auth.refresh", "", "", false, err.Error())
 		if err == domerrors.ErrInvalidToken {
 			writeErr(w, http.StatusUnauthorized, err.Error())
 			return
@@ -135,6 +152,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	AuditLog(h.log, r, "auth.refresh", "", "", true, "")
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"access_token":  result.AccessToken,
 		"refresh_token": result.RefreshToken,

@@ -12,7 +12,7 @@ import (
 // HashAPIKeyFunc hashes an API key for storage/lookup (SHA256).
 type HashAPIKeyFunc func(string) string
 
-// SHA256HashAPIKey returns a func that hashes the key with SHA256 and returns hex string.
+// SHA256HashAPIKey returns a function that SHA256-hashes the key (hex).
 func SHA256HashAPIKey() HashAPIKeyFunc {
 	return func(key string) string {
 		h := sha256.Sum256([]byte(key))

@@ -7,33 +7,60 @@ import (
 	"github.com/amirhosseinghanipour/nonce/internal/domain"
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/persistence/db"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const setProjectIDSQL = `SELECT set_config('app.current_project_id', $1, true)`
+
 type UserRepository struct {
-	q *db.Queries
+	q          *db.Queries
+	pool       *pgxpool.Pool
+	rlsEnabled bool
 }
 
-func NewUserRepository(q *db.Queries) *UserRepository {
-	return &UserRepository{q: q}
+func NewUserRepository(q *db.Queries, pool *pgxpool.Pool, rlsEnabled bool) *UserRepository {
+	return &UserRepository{q: q, pool: pool, rlsEnabled: rlsEnabled}
 }
 
-func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
-	_, err := r.q.CreateUser(ctx, db.CreateUserParams{
-		ID:           user.ID.UUID,
-		ProjectID:    user.ProjectID.UUID,
-		Email:        user.Email,
-		PasswordHash: user.PasswordHash,
-		CreatedAt:    user.CreatedAt,
-		UpdatedAt:    user.UpdatedAt,
-	})
+func (r *UserRepository) runWithRLS(ctx context.Context, projectID domain.ProjectID, fn func(*db.Queries) error) error {
+	if !r.rlsEnabled || r.pool == nil {
+		return fn(r.q)
+	}
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	return nil
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, setProjectIDSQL, projectID.String()); err != nil {
+		return err
+	}
+	if err := fn(db.New(tx)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
+	return r.runWithRLS(ctx, user.ProjectID, func(q *db.Queries) error {
+		_, err := q.CreateUser(ctx, db.CreateUserParams{
+			ID:           user.ID.UUID,
+			ProjectID:    user.ProjectID.UUID,
+			Email:        user.Email,
+			PasswordHash: user.PasswordHash,
+			CreatedAt:    user.CreatedAt,
+			UpdatedAt:    user.UpdatedAt,
+		})
+		return err
+	})
 }
 
 func (r *UserRepository) GetByEmail(ctx context.Context, projectID domain.ProjectID, email string) (*domain.User, error) {
-	u, err := r.q.GetUserByEmail(ctx, db.GetUserByEmailParams{ProjectID: projectID.UUID, Email: email})
+	var u db.User
+	err := r.runWithRLS(ctx, projectID, func(q *db.Queries) error {
+		var e error
+		u, e = q.GetUserByEmail(ctx, db.GetUserByEmailParams{ProjectID: projectID.UUID, Email: email})
+		return e
+	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -44,7 +71,12 @@ func (r *UserRepository) GetByEmail(ctx context.Context, projectID domain.Projec
 }
 
 func (r *UserRepository) GetByID(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) (*domain.User, error) {
-	u, err := r.q.GetUserByID(ctx, db.GetUserByIDParams{ProjectID: projectID.UUID, ID: userID.UUID})
+	var u db.User
+	err := r.runWithRLS(ctx, projectID, func(q *db.Queries) error {
+		var e error
+		u, e = q.GetUserByID(ctx, db.GetUserByIDParams{ProjectID: projectID.UUID, ID: userID.UUID})
+		return e
+	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil

@@ -8,10 +8,30 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	JWT      JWTConfig
-	Argon2   Argon2Config
+	Server    ServerConfig
+	Database  DatabaseConfig
+	JWT       JWTConfig
+	Argon2    Argon2Config
+	RateLimit RateLimitConfig
+	Secure    SecureConfig
+	RLS       RLSConfig
+}
+
+type RateLimitConfig struct {
+	// Per IP ("100-M" = 100/min). Empty = disabled.
+	RatePerIP string
+	// Per project ("200-M"). Empty = disabled.
+	RatePerProject string
+}
+
+type SecureConfig struct {
+	// IsDevelopment disables strict host/SSL/STS in dev.
+	IsDevelopment bool
+}
+
+type RLSConfig struct {
+	// Enabled turns on Row-Level Security for users and refresh_tokens.
+	Enabled bool
 }
 
 type ServerConfig struct {
@@ -77,6 +97,16 @@ func Load() (*Config, error) {
 	}
 	if cfg.Argon2.Parallelism == 0 {
 		cfg.Argon2.Parallelism = 2
+	}
+	cfg.RateLimit = RateLimitConfig{
+		RatePerIP:      getEnvOrDefault("RATE_LIMIT_PER_IP", "100-M"),
+		RatePerProject: getEnvOrDefault("RATE_LIMIT_PER_PROJECT", "200-M"),
+	}
+	cfg.Secure = SecureConfig{
+		IsDevelopment: getEnvOrDefault("SECURE_IS_DEV", "true") == "true" || os.Getenv("SECURE_IS_DEV") == "1",
+	}
+	cfg.RLS = RLSConfig{
+		Enabled: getEnvOrDefault("RLS_ENABLED", "false") == "true" || os.Getenv("RLS_ENABLED") == "1",
 	}
 	return cfg, nil
 }

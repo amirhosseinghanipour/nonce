@@ -59,6 +59,14 @@ docker compose up --build
 
 API at http://localhost:8080. Use `X-Nonce-Project-Key: dev-key` for the seeded project.
 
+## Security hardening
+
+- **Rate limiting**: Per-IP (`RATE_LIMIT_PER_IP`, default `100-M`) and per-project (`RATE_LIMIT_PER_PROJECT`, default `200-M`) using in-memory store. Use `X-RateLimit-*` headers on auth routes.
+- **Secure headers**: `unrolled/secure` (X-Frame-Options, X-Content-Type-Options, etc.). Set `SECURE_IS_DEV=false` in production.
+- **Validation**: Email/password max lengths (254/128) and sanitization (trim, lowercase email).
+- **Audit**: Structured zerolog events for `user.signup`, `user.login`, `auth.refresh` (success/fail) with `project_id`, `user_id`, `ip`, `request_id`.
+- **RLS**: Optional Row-Level Security on `users` table. Run migration `00003_rls.sql` and set `RLS_ENABLED=true`. The app sets `app.current_project_id` in each tenant-scoped DB transaction when RLS is enabled.
+
 ## Configuration
 
 Env (or Viper config file):
@@ -69,6 +77,9 @@ Env (or Viper config file):
 - `JWT_ISSUER`, `JWT_AUDIENCE` – optional JWT claims
 - `JWT_ACCESS_EXPIRY`, `JWT_REFRESH_EXPIRY` – seconds (default 900, 604800)
 - `ARGON2_MEMORY`, `ARGON2_ITERATIONS`, `ARGON2_PARALLELISM` – Argon2id params
+- `RATE_LIMIT_PER_IP`, `RATE_LIMIT_PER_PROJECT` – e.g. `100-M`, `200-M` (empty = disabled)
+- `SECURE_IS_DEV` – `true` in dev (relax SSL/host), `false` in production
+- `RLS_ENABLED` – `true` to enable Row-Level Security on users (requires migration `00003_rls.sql`)
 
 ## License
 
