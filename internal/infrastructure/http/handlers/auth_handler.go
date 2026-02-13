@@ -25,7 +25,8 @@ type AuthHandler struct {
 	resetPassword          *auth.ResetPassword
 	sendEmailVerification  *auth.SendEmailVerification
 	verifyEmail            *auth.VerifyEmail
-	issueTOTP              *auth.IssueTOTP
+	signInAnonymous       *auth.SignInAnonymous
+	issueTOTP             *auth.IssueTOTP
 	verifyTOTP              *auth.VerifyTOTP
 	verifyMFA               *auth.VerifyMFA
 	userRepo                ports.UserRepository
@@ -34,7 +35,7 @@ type AuthHandler struct {
 	log                     zerolog.Logger
 }
 
-func NewAuthHandler(register *auth.RegisterUser, login *auth.Login, refresh *auth.Refresh, sendMagicLink *auth.SendMagicLink, verifyMagicLink *auth.VerifyMagicLink, forgotPassword *auth.ForgotPassword, resetPassword *auth.ResetPassword, sendEmailVerification *auth.SendEmailVerification, verifyEmail *auth.VerifyEmail, sendVerificationOnSignup bool, issueTOTP *auth.IssueTOTP, verifyTOTP *auth.VerifyTOTP, verifyMFA *auth.VerifyMFA, userRepo ports.UserRepository, log zerolog.Logger) *AuthHandler {
+func NewAuthHandler(register *auth.RegisterUser, login *auth.Login, refresh *auth.Refresh, sendMagicLink *auth.SendMagicLink, verifyMagicLink *auth.VerifyMagicLink, forgotPassword *auth.ForgotPassword, resetPassword *auth.ResetPassword, sendEmailVerification *auth.SendEmailVerification, verifyEmail *auth.VerifyEmail, signInAnonymous *auth.SignInAnonymous, sendVerificationOnSignup bool, issueTOTP *auth.IssueTOTP, verifyTOTP *auth.VerifyTOTP, verifyMFA *auth.VerifyMFA, userRepo ports.UserRepository, log zerolog.Logger) *AuthHandler {
 	return &AuthHandler{
 		register:                register,
 		login:                   login,
@@ -45,6 +46,7 @@ func NewAuthHandler(register *auth.RegisterUser, login *auth.Login, refresh *aut
 		resetPassword:           resetPassword,
 		sendEmailVerification:   sendEmailVerification,
 		verifyEmail:             verifyEmail,
+		signInAnonymous:         signInAnonymous,
 		userRepo:                userRepo,
 		sendVerificationOnSignup: sendVerificationOnSignup,
 		validate:                validator.New(),
@@ -172,6 +174,37 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		"user": map[string]interface{}{
 			"id":    result.User.ID.String(),
 			"email": result.User.Email,
+		},
+	})
+}
+
+func (h *AuthHandler) Anonymous(w http.ResponseWriter, r *http.Request) {
+	if h.signInAnonymous == nil {
+		writeErr(w, http.StatusNotImplemented, "anonymous sign-in not configured")
+		return
+	}
+	project := middleware.ProjectFromContext(r.Context())
+	if project == nil {
+		writeErr(w, http.StatusUnauthorized, "project required")
+		return
+	}
+	result, err := h.signInAnonymous.Execute(r.Context(), auth.SignInAnonymousInput{ProjectID: project.ID})
+	if err != nil {
+		AuditLog(h.log, r, "auth.anonymous", project.ID.String(), "", false, err.Error())
+		middleware.RecordAuthAttempt("anonymous", project.ID.String(), false)
+		h.log.Error().Err(err).Msg("anonymous sign-in failed")
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	AuditLog(h.log, r, "auth.anonymous", project.ID.String(), result.User.ID.String(), true, "")
+	middleware.RecordAuthAttempt("anonymous", project.ID.String(), true)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"access_token":  result.AccessToken,
+		"refresh_token": result.RefreshToken,
+		"expires_in":    result.ExpiresIn,
+		"user": map[string]interface{}{
+			"id":        result.User.ID.String(),
+			"anonymous": true,
 		},
 	})
 }

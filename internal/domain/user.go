@@ -24,4 +24,5 @@ type User struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	EmailVerifiedAt *time.Time
+	IsAnonymous     bool
 }

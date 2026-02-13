@@ -26,10 +26,11 @@ func NewUsersHandler(userRepo ports.UserRepository) *UsersHandler {
 type MeResponse struct {
 	ID              string  `json:"id"`
 	ProjectID       string  `json:"project_id"`
-	Email           string  `json:"email"`
+	Email           string  `json:"email,omitempty"` // omitted for anonymous users
 	CreatedAt       string  `json:"created_at"`
 	UpdatedAt       string  `json:"updated_at"`
 	EmailVerifiedAt *string `json:"email_verified_at,omitempty"`
+	IsAnonymous     bool    `json:"anonymous"`
 }
 
 // Me returns the current user from the JWT. Requires AuthValidator middleware.
@@ -63,13 +64,18 @@ func (h *UsersHandler) Me(w http.ResponseWriter, r *http.Request) {
 		t := user.EmailVerifiedAt.Format("2006-01-02T15:04:05Z07:00")
 		emailVerifiedAt = &t
 	}
+	email := user.Email
+	if user.IsAnonymous {
+		email = "" // don't expose placeholder email
+	}
 	resp := MeResponse{
 		ID:              user.ID.String(),
 		ProjectID:       user.ProjectID.String(),
-		Email:           user.Email,
+		Email:           email,
 		CreatedAt:       user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:       user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		EmailVerifiedAt: emailVerifiedAt,
+		IsAnonymous:     user.IsAnonymous,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -118,13 +124,18 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 			t := u.EmailVerifiedAt.Format("2006-01-02T15:04:05Z07:00")
 			emailVerifiedAt = &t
 		}
+		email := u.Email
+		if u.IsAnonymous {
+			email = ""
+		}
 		items = append(items, MeResponse{
 			ID:              u.ID.String(),
 			ProjectID:       u.ProjectID.String(),
-			Email:           u.Email,
+			Email:           email,
 			CreatedAt:       u.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			UpdatedAt:       u.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			EmailVerifiedAt: emailVerifiedAt,
+			IsAnonymous:     u.IsAnonymous,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"users": items})

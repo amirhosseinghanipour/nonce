@@ -54,6 +54,7 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 			PasswordHash: user.PasswordHash,
 			CreatedAt:    user.CreatedAt,
 			UpdatedAt:    user.UpdatedAt,
+			IsAnonymous:  user.IsAnonymous,
 		})
 		return err
 	})
@@ -164,6 +165,7 @@ func dbUserToDomain(u db.User) *domain.User {
 		CreatedAt:       u.CreatedAt,
 		UpdatedAt:       u.UpdatedAt,
 		EmailVerifiedAt: emailVerifiedAt,
+		IsAnonymous:     u.IsAnonymous,
 	}
 }
 

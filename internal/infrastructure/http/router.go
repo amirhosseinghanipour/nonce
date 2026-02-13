@@ -79,6 +79,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			}
 			r.Post("/signup", cfg.AuthHandler.Signup)
 			r.Post("/login", cfg.AuthHandler.Login)
+			r.Post("/anonymous", cfg.AuthHandler.Anonymous)
 			r.Post("/magic-link/send", cfg.AuthHandler.SendMagicLink)
 			r.Post("/forgot-password", cfg.AuthHandler.ForgotPassword)
 			if cfg.WebAuthnHandler != nil {

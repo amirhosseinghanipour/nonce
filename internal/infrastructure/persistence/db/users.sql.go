@@ -13,9 +13,9 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (id, project_id, email, password_hash, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, project_id, email, password_hash, created_at, updated_at, email_verified_at
+INSERT INTO users (id, project_id, email, password_hash, created_at, updated_at, is_anonymous)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous
 `
 
 type CreateUserParams struct {
@@ -25,6 +25,7 @@ type CreateUserParams struct {
 	PasswordHash string    `json:"password_hash"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	IsAnonymous  bool      `json:"is_anonymous"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -35,6 +36,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.PasswordHash,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.IsAnonymous,
 	)
 	var i User
 	err := row.Scan(
@@ -45,12 +47,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.EmailVerifiedAt,
+		&i.IsAnonymous,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at
+SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous
 FROM users
 WHERE project_id = $1 AND email = $2
 `
@@ -71,12 +74,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.EmailVerifiedAt,
+		&i.IsAnonymous,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at
+SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous
 FROM users
 WHERE project_id = $1 AND id = $2
 `
@@ -97,12 +101,13 @@ func (q *Queries) GetUserByID(ctx context.Context, arg GetUserByIDParams) (User,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.EmailVerifiedAt,
+		&i.IsAnonymous,
 	)
 	return i, err
 }
 
 const listUsersByProjectID = `-- name: ListUsersByProjectID :many
-SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at
+SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous
 FROM users
 WHERE project_id = $1
 ORDER BY created_at DESC
@@ -132,6 +137,7 @@ func (q *Queries) ListUsersByProjectID(ctx context.Context, arg ListUsersByProje
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.EmailVerifiedAt,
+			&i.IsAnonymous,
 		); err != nil {
 			return nil, err
 		}

@@ -36,4 +36,5 @@ type User struct {
 	CreatedAt       time.Time          `json:"created_at"`
 	UpdatedAt       time.Time          `json:"updated_at"`
 	EmailVerifiedAt pgtype.Timestamptz `json:"email_verified_at"`
+	IsAnonymous     bool               `json:"is_anonymous"`
 }

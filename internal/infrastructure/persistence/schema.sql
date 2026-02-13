@@ -15,6 +15,7 @@ CREATE TABLE users (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     email_verified_at TIMESTAMPTZ,
+    is_anonymous BOOLEAN NOT NULL DEFAULT false,
     UNIQUE(project_id, email)
 );
 
