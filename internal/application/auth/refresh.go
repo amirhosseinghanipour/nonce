@@ -46,15 +46,24 @@ func (uc *Refresh) Execute(ctx context.Context, input RefreshInput) (*RefreshRes
 	if input.RefreshToken == "" {
 		return nil, errors.ErrInvalidToken
 	}
-	tokenHash := input.RefreshToken
-	projectID, userID, err := uc.tokenStore.GetRefreshToken(ctx, tokenHash)
+	tokenHash := hashForStorage(input.RefreshToken)
+	info, err := uc.tokenStore.GetRefreshToken(ctx, tokenHash)
 	if err != nil {
 		return nil, errors.ErrInvalidToken
 	}
-	if err := uc.tokenStore.RevokeRefreshToken(ctx, tokenHash); err != nil {
+	// Reuse detection: token was already rotated (used once before).
+	if info.RevokedAt != nil {
+		_ = uc.tokenStore.RevokeTokenAndDescendants(ctx, info.TokenID)
+		return nil, errors.ErrRefreshTokenReuse
+	}
+	if time.Now().After(info.ExpiresAt) {
+		return nil, errors.ErrInvalidToken
+	}
+	// Mark this token as rotated (used), then create new token with parent_id = this id.
+	if err := uc.tokenStore.MarkTokenRotated(ctx, info.TokenID); err != nil {
 		return nil, err
 	}
-	accessToken, err := uc.issuer.IssueAccessToken(projectID.String(), userID.String(), uc.accessExp)
+	accessToken, err := uc.issuer.IssueAccessToken(info.ProjectID.String(), info.UserID.String(), uc.accessExp)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +73,8 @@ func (uc *Refresh) Execute(ctx context.Context, input RefreshInput) (*RefreshRes
 	}
 	newRefresh := hex.EncodeToString(newRefreshRaw)
 	expiresAt := time.Now().Add(time.Duration(uc.refreshExp) * time.Second).Unix()
-	if err := uc.tokenStore.StoreRefreshToken(ctx, projectID, userID, newRefresh, expiresAt); err != nil {
+	parentID := info.TokenID
+	if err := uc.tokenStore.StoreRefreshToken(ctx, info.ProjectID, info.UserID, &parentID, hashForStorage(newRefresh), expiresAt); err != nil {
 		return nil, err
 	}
 	return &RefreshResult{

@@ -179,7 +179,7 @@ func (h *WebAuthnHandler) LoginFinish(w http.ResponseWriter, r *http.Request) {
 	rand.Read(refreshRaw)
 	refreshToken := hex.EncodeToString(refreshRaw)
 	expiresAt := time.Now().Add(time.Duration(h.refreshExp) * time.Second).Unix()
-	if err := h.tokenStore.StoreRefreshToken(r.Context(), projectID, userID, refreshToken, expiresAt); err != nil {
+	if err := h.tokenStore.StoreRefreshToken(r.Context(), projectID, userID, nil, refreshToken, expiresAt); err != nil {
 		h.log.Error().Err(err).Msg("store refresh token failed")
 		writeErr(w, http.StatusInternalServerError, "internal error")
 		return

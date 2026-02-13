@@ -20,12 +20,14 @@ type Project struct {
 }
 
 type RefreshToken struct {
-	ID        uuid.UUID `json:"id"`
-	ProjectID uuid.UUID `json:"project_id"`
-	UserID    uuid.UUID `json:"user_id"`
-	TokenHash string    `json:"token_hash"`
-	ExpiresAt time.Time `json:"expires_at"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        uuid.UUID          `json:"id"`
+	ProjectID uuid.UUID          `json:"project_id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	TokenHash string             `json:"token_hash"`
+	ExpiresAt time.Time          `json:"expires_at"`
+	CreatedAt time.Time          `json:"created_at"`
+	ParentID  pgtype.UUID        `json:"parent_id"`
+	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
 }
 
 type User struct {

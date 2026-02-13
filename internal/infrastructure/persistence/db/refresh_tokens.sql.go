@@ -10,21 +10,23 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createRefreshToken = `-- name: CreateRefreshToken :one
-INSERT INTO refresh_tokens (id, project_id, user_id, token_hash, expires_at, created_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, project_id, user_id, token_hash, expires_at, created_at
+INSERT INTO refresh_tokens (id, project_id, user_id, token_hash, expires_at, created_at, parent_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, project_id, user_id, token_hash, expires_at, created_at, parent_id, revoked_at
 `
 
 type CreateRefreshTokenParams struct {
-	ID        uuid.UUID `json:"id"`
-	ProjectID uuid.UUID `json:"project_id"`
-	UserID    uuid.UUID `json:"user_id"`
-	TokenHash string    `json:"token_hash"`
-	ExpiresAt time.Time `json:"expires_at"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        uuid.UUID   `json:"id"`
+	ProjectID uuid.UUID   `json:"project_id"`
+	UserID    uuid.UUID   `json:"user_id"`
+	TokenHash string      `json:"token_hash"`
+	ExpiresAt time.Time   `json:"expires_at"`
+	CreatedAt time.Time   `json:"created_at"`
+	ParentID  pgtype.UUID `json:"parent_id"`
 }
 
 func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error) {
@@ -35,6 +37,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 		arg.TokenHash,
 		arg.ExpiresAt,
 		arg.CreatedAt,
+		arg.ParentID,
 	)
 	var i RefreshToken
 	err := row.Scan(
@@ -44,6 +47,8 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 		&i.TokenHash,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.ParentID,
+		&i.RevokedAt,
 	)
 	return i, err
 }
@@ -57,19 +62,10 @@ func (q *Queries) DeleteExpiredRefreshTokens(ctx context.Context) error {
 	return err
 }
 
-const deleteRefreshTokenByHash = `-- name: DeleteRefreshTokenByHash :exec
-DELETE FROM refresh_tokens WHERE token_hash = $1
-`
-
-func (q *Queries) DeleteRefreshTokenByHash(ctx context.Context, tokenHash string) error {
-	_, err := q.db.Exec(ctx, deleteRefreshTokenByHash, tokenHash)
-	return err
-}
-
 const getRefreshTokenByHash = `-- name: GetRefreshTokenByHash :one
-SELECT id, project_id, user_id, token_hash, expires_at, created_at
+SELECT id, project_id, user_id, token_hash, expires_at, created_at, parent_id, revoked_at
 FROM refresh_tokens
-WHERE token_hash = $1 AND expires_at > NOW()
+WHERE token_hash = $1
 `
 
 func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error) {
@@ -82,6 +78,17 @@ func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (
 		&i.TokenHash,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.ParentID,
+		&i.RevokedAt,
 	)
 	return i, err
+}
+
+const setRefreshTokenRevoked = `-- name: SetRefreshTokenRevoked :exec
+UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, NOW()) WHERE id = $1
+`
+
+func (q *Queries) SetRefreshTokenRevoked(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, setRefreshTokenRevoked, id)
+	return err
 }

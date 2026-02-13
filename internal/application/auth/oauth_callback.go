@@ -112,7 +112,7 @@ func (uc *OAuthCallback) issueTokens(ctx context.Context, projectID domain.Proje
 	}
 	refreshToken := hex.EncodeToString(refreshRaw)
 	expiresAt := time.Now().Add(time.Duration(uc.refreshExp) * time.Second).Unix()
-	if err := uc.tokenStore.StoreRefreshToken(ctx, projectID, user.ID, refreshToken, expiresAt); err != nil {
+	if err := uc.tokenStore.StoreRefreshToken(ctx, projectID, user.ID, nil, refreshToken, expiresAt); err != nil {
 		return nil, err
 	}
 	return &OAuthCallbackResult{

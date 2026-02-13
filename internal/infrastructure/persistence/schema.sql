@@ -27,5 +27,7 @@ CREATE TABLE refresh_tokens (
     user_id UUID NOT NULL REFERENCES users(id),
     token_hash TEXT NOT NULL UNIQUE,
     expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL
+    created_at TIMESTAMPTZ NOT NULL,
+    parent_id UUID REFERENCES refresh_tokens(id),
+    revoked_at TIMESTAMPTZ
 );

@@ -225,6 +225,11 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		AuditLog(h.log, r, "auth.refresh", "", "", false, err.Error())
 		middleware.RecordAuthAttempt("refresh", "", false)
+		if err == domerrors.ErrRefreshTokenReuse {
+			h.log.Warn().Str("event", "refresh_token_reuse").Msg("refresh token reuse detected; session tree revoked")
+			writeErr(w, http.StatusUnauthorized, domerrors.ErrInvalidToken.Error())
+			return
+		}
 		if err == domerrors.ErrInvalidToken {
 			writeErr(w, http.StatusUnauthorized, err.Error())
 			return

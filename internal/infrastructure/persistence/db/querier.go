@@ -15,13 +15,13 @@ type Querier interface {
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteExpiredRefreshTokens(ctx context.Context) error
-	DeleteRefreshTokenByHash(ctx context.Context, tokenHash string) error
 	GetProjectByAPIKeyHash(ctx context.Context, apiKeyHash string) (Project, error)
 	GetProjectByID(ctx context.Context, id uuid.UUID) (Project, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error)
 	GetUserByID(ctx context.Context, arg GetUserByIDParams) (User, error)
 	ListUsersByProjectID(ctx context.Context, arg ListUsersByProjectIDParams) ([]User, error)
+	SetRefreshTokenRevoked(ctx context.Context, id uuid.UUID) error
 	UpdateAppMetadata(ctx context.Context, arg UpdateAppMetadataParams) error
 	UpdateProjectAPIKeyHash(ctx context.Context, arg UpdateProjectAPIKeyHashParams) error
 	UpdateUserMetadata(ctx context.Context, arg UpdateUserMetadataParams) error

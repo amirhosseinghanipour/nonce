@@ -97,7 +97,7 @@ func (uc *Login) Execute(ctx context.Context, input LoginInput) (*LoginResult, e
 	refreshToken := hex.EncodeToString(refreshRaw)
 	refreshHash := hashForStorage(refreshToken)
 	expiresAt := time.Now().Add(time.Duration(uc.refreshExp) * time.Second).Unix()
-	if err := uc.tokenStore.StoreRefreshToken(ctx, input.ProjectID, user.ID, refreshHash, expiresAt); err != nil {
+	if err := uc.tokenStore.StoreRefreshToken(ctx, input.ProjectID, user.ID, nil, refreshHash, expiresAt); err != nil {
 		return nil, err
 	}
 	return &LoginResult{

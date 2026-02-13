@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/amirhosseinghanipour/nonce/internal/domain"
 )
@@ -26,10 +27,21 @@ type ProjectRepository interface {
 	UpdateAPIKeyHash(ctx context.Context, projectID domain.ProjectID, apiKeyHash string) error
 }
 
+// RefreshTokenInfo is returned by GetRefreshToken for reuse detection and rotation.
+type RefreshTokenInfo struct {
+	ProjectID domain.ProjectID
+	UserID    domain.UserID
+	TokenID   string // UUID of the refresh_tokens row
+	RevokedAt *time.Time
+	ExpiresAt time.Time
+}
+
 // TokenStore defines storage for refresh tokens (Redis or DB).
 type TokenStore interface {
-	StoreRefreshToken(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, tokenHash string, expiresAt int64) error
-	GetRefreshToken(ctx context.Context, tokenHash string) (projectID domain.ProjectID, userID domain.UserID, err error)
+	StoreRefreshToken(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, parentTokenID *string, tokenHash string, expiresAt int64) error
+	GetRefreshToken(ctx context.Context, tokenHash string) (*RefreshTokenInfo, error)
+	MarkTokenRotated(ctx context.Context, tokenID string) error
+	RevokeTokenAndDescendants(ctx context.Context, tokenID string) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 }
 

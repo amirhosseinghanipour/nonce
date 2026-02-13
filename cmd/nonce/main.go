@@ -67,7 +67,7 @@ func main() {
 	queries := db.New(pool)
 	userRepo := postgres.NewUserRepository(queries, pool, cfg.RLS.Enabled)
 	projectRepo := postgres.NewProjectRepository(queries)
-	tokenStore := postgres.NewTokenStore(queries)
+	tokenStore := postgres.NewTokenStore(queries, pool)
 	magicLinkStore := postgres.NewMagicLinkRepository(queries, pool)
 
 	var taskEnqueuer ports.TaskEnqueuer
