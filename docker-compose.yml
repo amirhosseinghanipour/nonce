@@ -1,0 +1,37 @@
+services:
+  nonce:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/nonce?sslmode=disable"
+      JWT_PRIVATE_KEY_PATH: "/run/secrets/jwt_private_key"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    secrets:
+      - jwt_private_key
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nonce
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
+
+secrets:
+  jwt_private_key:
+    file: ./scripts/dev-jwt-private.pem
