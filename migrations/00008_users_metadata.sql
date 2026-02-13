@@ -1,0 +1,7 @@
+-- +goose Up
+ALTER TABLE users ADD COLUMN IF NOT EXISTS user_metadata JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS app_metadata JSONB NOT NULL DEFAULT '{}';
+
+-- +goose Down
+ALTER TABLE users DROP COLUMN IF EXISTS user_metadata;
+ALTER TABLE users DROP COLUMN IF EXISTS app_metadata;

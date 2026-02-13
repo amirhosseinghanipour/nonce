@@ -112,6 +112,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Use(cfg.RequireJWT)
 			r.Get("/", cfg.UsersHandler.List)
 			r.Get("/me", cfg.UsersHandler.Me)
+			r.Patch("/me", cfg.UsersHandler.UpdateMe)
 		})
 	}
 
@@ -120,6 +121,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Use(cfg.RequireAdmin)
 			r.Post("/projects", cfg.AdminHandler.CreateProject)
 			r.Post("/projects/{id}/rotate-key", cfg.AdminHandler.RotateProjectKey)
+			r.Patch("/projects/{project_id}/users/{user_id}/app-metadata", cfg.AdminHandler.SetUserAppMetadata)
 		})
 	}
 

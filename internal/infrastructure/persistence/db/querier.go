@@ -22,7 +22,9 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error)
 	GetUserByID(ctx context.Context, arg GetUserByIDParams) (User, error)
 	ListUsersByProjectID(ctx context.Context, arg ListUsersByProjectIDParams) ([]User, error)
+	UpdateAppMetadata(ctx context.Context, arg UpdateAppMetadataParams) error
 	UpdateProjectAPIKeyHash(ctx context.Context, arg UpdateProjectAPIKeyHashParams) error
+	UpdateUserMetadata(ctx context.Context, arg UpdateUserMetadataParams) error
 }
 
 var _ Querier = (*Queries)(nil)

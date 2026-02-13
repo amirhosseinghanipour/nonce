@@ -24,13 +24,15 @@ func NewUsersHandler(userRepo ports.UserRepository) *UsersHandler {
 
 // MeResponse is the JSON shape for GET /users/me (no password).
 type MeResponse struct {
-	ID              string  `json:"id"`
-	ProjectID       string  `json:"project_id"`
-	Email           string  `json:"email,omitempty"` // omitted for anonymous users
-	CreatedAt       string  `json:"created_at"`
-	UpdatedAt       string  `json:"updated_at"`
-	EmailVerifiedAt *string `json:"email_verified_at,omitempty"`
-	IsAnonymous     bool    `json:"anonymous"`
+	ID              string                 `json:"id"`
+	ProjectID       string                 `json:"project_id"`
+	Email           string                 `json:"email,omitempty"` // omitted for anonymous users
+	CreatedAt       string                 `json:"created_at"`
+	UpdatedAt       string                 `json:"updated_at"`
+	EmailVerifiedAt *string                `json:"email_verified_at,omitempty"`
+	IsAnonymous     bool                   `json:"anonymous"`
+	UserMetadata    map[string]interface{} `json:"user_metadata,omitempty"`
+	AppMetadata     map[string]interface{} `json:"app_metadata,omitempty"`
 }
 
 // Me returns the current user from the JWT. Requires AuthValidator middleware.
@@ -76,6 +78,8 @@ func (h *UsersHandler) Me(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:       user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		EmailVerifiedAt: emailVerifiedAt,
 		IsAnonymous:     user.IsAnonymous,
+		UserMetadata:    user.UserMetadata,
+		AppMetadata:     user.AppMetadata,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -136,7 +140,93 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:       u.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			EmailVerifiedAt: emailVerifiedAt,
 			IsAnonymous:     u.IsAnonymous,
+			UserMetadata:    u.UserMetadata,
+			AppMetadata:     u.AppMetadata,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"users": items})
+}
+
+// UpdateMeRequest is the body for PATCH /users/me (partial update of user_metadata).
+type UpdateMeRequest struct {
+	UserMetadata map[string]interface{} `json:"user_metadata"`
+}
+
+// UpdateMe merges the request user_metadata into the current user's user_metadata and saves. Requires JWT.
+func (h *UsersHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	if projectIDStr == "" || userIDStr == "" {
+		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	projectID, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid project id")
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	var body UpdateMeRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if body.UserMetadata == nil {
+		writeErr(w, http.StatusBadRequest, "user_metadata required")
+		return
+	}
+	pid := domain.NewProjectID(projectID)
+	uid := domain.NewUserID(userID)
+	user, err := h.userRepo.GetByID(r.Context(), pid, uid)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if user == nil {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	// Merge: existing keys updated, new keys added.
+	merged := make(map[string]interface{})
+	if user.UserMetadata != nil {
+		for k, v := range user.UserMetadata {
+			merged[k] = v
+		}
+	}
+	for k, v := range body.UserMetadata {
+		merged[k] = v
+	}
+	if err := h.userRepo.UpdateUserMetadata(r.Context(), pid, uid, merged); err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	// Return updated user (re-fetch to get consistent view).
+	user, _ = h.userRepo.GetByID(r.Context(), pid, uid)
+	if user == nil {
+		writeJSON(w, http.StatusOK, map[string]string{"message": "updated"})
+		return
+	}
+	email := user.Email
+	if user.IsAnonymous {
+		email = ""
+	}
+	var emailVerifiedAt *string
+	if user.EmailVerifiedAt != nil {
+		t := user.EmailVerifiedAt.Format("2006-01-02T15:04:05Z07:00")
+		emailVerifiedAt = &t
+	}
+	writeJSON(w, http.StatusOK, MeResponse{
+		ID:              user.ID.String(),
+		ProjectID:       user.ProjectID.String(),
+		Email:           email,
+		CreatedAt:       user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:       user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		EmailVerifiedAt: emailVerifiedAt,
+		IsAnonymous:     user.IsAnonymous,
+		UserMetadata:    user.UserMetadata,
+		AppMetadata:     user.AppMetadata,
+	})
 }

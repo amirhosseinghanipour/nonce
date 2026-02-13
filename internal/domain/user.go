@@ -25,4 +25,8 @@ type User struct {
 	UpdatedAt       time.Time
 	EmailVerifiedAt *time.Time
 	IsAnonymous     bool
+	// UserMetadata is user-editable (display_name, avatar_url, preferences, etc.).
+	UserMetadata map[string]interface{}
+	// AppMetadata is read-only for user; backend/admin only (roles, plan, internal flags).
+	AppMetadata map[string]interface{}
 }

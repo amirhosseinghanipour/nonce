@@ -148,7 +148,7 @@ func main() {
 	tenantResolver := middleware.NewTenantResolver(projectRepo, hashAPIKey)
 	createProjectUC := project.NewCreateProject(projectRepo, hashAPIKey)
 	rotateProjectKeyUC := project.NewRotateProjectKey(projectRepo, hashAPIKey)
-	adminHandler := handlers.NewAdminHandler(createProjectUC, rotateProjectKeyUC, log)
+	adminHandler := handlers.NewAdminHandler(createProjectUC, rotateProjectKeyUC, userRepo, log)
 	requireAdmin := middleware.RequireAdminSecret(cfg.Admin.Secret)
 
 	ipLimit, err := middleware.NewIPRateLimiter(cfg.RateLimit.RatePerIP)

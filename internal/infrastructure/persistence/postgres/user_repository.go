@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/amirhosseinghanipour/nonce/internal/application/ports"
@@ -55,6 +56,8 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 			CreatedAt:    user.CreatedAt,
 			UpdatedAt:    user.UpdatedAt,
 			IsAnonymous:  user.IsAnonymous,
+			UserMetadata: metadataMapToBytes(user.UserMetadata),
+			AppMetadata:  metadataMapToBytes(user.AppMetadata),
 		})
 		return err
 	})
@@ -151,6 +154,26 @@ func (r *UserRepository) SetEmailVerified(ctx context.Context, projectID domain.
 	return err
 }
 
+func (r *UserRepository) UpdateUserMetadata(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, metadata map[string]interface{}) error {
+	return r.runWithRLS(ctx, projectID, func(q *db.Queries) error {
+		return q.UpdateUserMetadata(ctx, db.UpdateUserMetadataParams{
+			UserMetadata: metadataMapToBytes(metadata),
+			ProjectID:    projectID.UUID,
+			ID:           userID.UUID,
+		})
+	})
+}
+
+func (r *UserRepository) UpdateAppMetadata(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, metadata map[string]interface{}) error {
+	return r.runWithRLS(ctx, projectID, func(q *db.Queries) error {
+		return q.UpdateAppMetadata(ctx, db.UpdateAppMetadataParams{
+			AppMetadata: metadataMapToBytes(metadata),
+			ProjectID:   projectID.UUID,
+			ID:          userID.UUID,
+		})
+	})
+}
+
 func dbUserToDomain(u db.User) *domain.User {
 	var emailVerifiedAt *time.Time
 	if u.EmailVerifiedAt.Valid {
@@ -166,7 +189,28 @@ func dbUserToDomain(u db.User) *domain.User {
 		UpdatedAt:       u.UpdatedAt,
 		EmailVerifiedAt: emailVerifiedAt,
 		IsAnonymous:     u.IsAnonymous,
+		UserMetadata:    metadataBytesToMap(u.UserMetadata),
+		AppMetadata:     metadataBytesToMap(u.AppMetadata),
 	}
+}
+
+func metadataBytesToMap(b []byte) map[string]interface{} {
+	if len(b) == 0 {
+		return nil
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil
+	}
+	return m
+}
+
+func metadataMapToBytes(m map[string]interface{}) []byte {
+	if m == nil {
+		return []byte("{}")
+	}
+	b, _ := json.Marshal(m)
+	return b
 }
 
 // Ensure UserRepository implements ports.UserRepository.

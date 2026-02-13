@@ -16,6 +16,8 @@ CREATE TABLE users (
     updated_at TIMESTAMPTZ NOT NULL,
     email_verified_at TIMESTAMPTZ,
     is_anonymous BOOLEAN NOT NULL DEFAULT false,
+    user_metadata JSONB NOT NULL DEFAULT '{}',
+    app_metadata JSONB NOT NULL DEFAULT '{}',
     UNIQUE(project_id, email)
 );
 

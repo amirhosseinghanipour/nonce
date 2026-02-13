@@ -13,9 +13,9 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (id, project_id, email, password_hash, created_at, updated_at, is_anonymous)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous
+INSERT INTO users (id, project_id, email, password_hash, created_at, updated_at, is_anonymous, user_metadata, app_metadata)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous, user_metadata, app_metadata
 `
 
 type CreateUserParams struct {
@@ -26,6 +26,8 @@ type CreateUserParams struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	IsAnonymous  bool      `json:"is_anonymous"`
+	UserMetadata []byte    `json:"user_metadata"`
+	AppMetadata  []byte    `json:"app_metadata"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -37,6 +39,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.CreatedAt,
 		arg.UpdatedAt,
 		arg.IsAnonymous,
+		arg.UserMetadata,
+		arg.AppMetadata,
 	)
 	var i User
 	err := row.Scan(
@@ -48,12 +52,14 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UpdatedAt,
 		&i.EmailVerifiedAt,
 		&i.IsAnonymous,
+		&i.UserMetadata,
+		&i.AppMetadata,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous
+SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous, user_metadata, app_metadata
 FROM users
 WHERE project_id = $1 AND email = $2
 `
@@ -75,12 +81,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) 
 		&i.UpdatedAt,
 		&i.EmailVerifiedAt,
 		&i.IsAnonymous,
+		&i.UserMetadata,
+		&i.AppMetadata,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous
+SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous, user_metadata, app_metadata
 FROM users
 WHERE project_id = $1 AND id = $2
 `
@@ -102,12 +110,14 @@ func (q *Queries) GetUserByID(ctx context.Context, arg GetUserByIDParams) (User,
 		&i.UpdatedAt,
 		&i.EmailVerifiedAt,
 		&i.IsAnonymous,
+		&i.UserMetadata,
+		&i.AppMetadata,
 	)
 	return i, err
 }
 
 const listUsersByProjectID = `-- name: ListUsersByProjectID :many
-SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous
+SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous, user_metadata, app_metadata
 FROM users
 WHERE project_id = $1
 ORDER BY created_at DESC
@@ -138,6 +148,8 @@ func (q *Queries) ListUsersByProjectID(ctx context.Context, arg ListUsersByProje
 			&i.UpdatedAt,
 			&i.EmailVerifiedAt,
 			&i.IsAnonymous,
+			&i.UserMetadata,
+			&i.AppMetadata,
 		); err != nil {
 			return nil, err
 		}
@@ -147,4 +159,34 @@ func (q *Queries) ListUsersByProjectID(ctx context.Context, arg ListUsersByProje
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateAppMetadata = `-- name: UpdateAppMetadata :exec
+UPDATE users SET app_metadata = $1, updated_at = NOW() WHERE project_id = $2 AND id = $3
+`
+
+type UpdateAppMetadataParams struct {
+	AppMetadata []byte    `json:"app_metadata"`
+	ProjectID   uuid.UUID `json:"project_id"`
+	ID          uuid.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateAppMetadata(ctx context.Context, arg UpdateAppMetadataParams) error {
+	_, err := q.db.Exec(ctx, updateAppMetadata, arg.AppMetadata, arg.ProjectID, arg.ID)
+	return err
+}
+
+const updateUserMetadata = `-- name: UpdateUserMetadata :exec
+UPDATE users SET user_metadata = $1, updated_at = NOW() WHERE project_id = $2 AND id = $3
+`
+
+type UpdateUserMetadataParams struct {
+	UserMetadata []byte    `json:"user_metadata"`
+	ProjectID    uuid.UUID `json:"project_id"`
+	ID           uuid.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateUserMetadata(ctx context.Context, arg UpdateUserMetadataParams) error {
+	_, err := q.db.Exec(ctx, updateUserMetadata, arg.UserMetadata, arg.ProjectID, arg.ID)
+	return err
 }

@@ -14,6 +14,8 @@ type UserRepository interface {
 	List(ctx context.Context, projectID domain.ProjectID, limit, offset int) ([]*domain.User, error)
 	UpdatePassword(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, passwordHash string) error
 	SetEmailVerified(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) error
+	UpdateUserMetadata(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, metadata map[string]interface{}) error
+	UpdateAppMetadata(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, metadata map[string]interface{}) error
 }
 
 // ProjectRepository defines persistence for projects (tenants).
