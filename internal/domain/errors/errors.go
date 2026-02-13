@@ -13,4 +13,5 @@ var (
 	ErrIdentityNotFound    = errors.New("identity not found")
 	ErrPasswordResetInvalid   = errors.New("password reset link invalid, expired, or already used")
 	ErrEmailVerificationInvalid = errors.New("email verification link invalid, expired, or already used")
+	ErrProjectNotFound          = errors.New("project not found")
 )

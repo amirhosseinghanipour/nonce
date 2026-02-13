@@ -17,6 +17,7 @@ import (
 
 	"github.com/amirhosseinghanipour/nonce/internal/application/auth"
 	"github.com/amirhosseinghanipour/nonce/internal/application/ports"
+	"github.com/amirhosseinghanipour/nonce/internal/application/project"
 	"github.com/amirhosseinghanipour/nonce/internal/config"
 	infraauth "github.com/amirhosseinghanipour/nonce/internal/infrastructure/auth"
 	httprouter "github.com/amirhosseinghanipour/nonce/internal/infrastructure/http"
@@ -144,6 +145,10 @@ func main() {
 		return hex.EncodeToString(h[:])
 	}
 	tenantResolver := middleware.NewTenantResolver(projectRepo, hashAPIKey)
+	createProjectUC := project.NewCreateProject(projectRepo, hashAPIKey)
+	rotateProjectKeyUC := project.NewRotateProjectKey(projectRepo, hashAPIKey)
+	adminHandler := handlers.NewAdminHandler(createProjectUC, rotateProjectKeyUC, log)
+	requireAdmin := middleware.RequireAdminSecret(cfg.Admin.Secret)
 
 	ipLimit, err := middleware.NewIPRateLimiter(cfg.RateLimit.RatePerIP)
 	if err != nil {
@@ -160,18 +165,20 @@ func main() {
 	requireJWT := middleware.NewAuthValidator(issuer).Handler
 	router := httprouter.NewRouter(httprouter.RouterConfig{
 		AuthHandler:      authHandler,
-		HealthHandler:    healthHandler,
-		UsersHandler:     usersHandler,
-		WebAuthnHandler:  webauthnHandler,
-		Tenant:           tenantResolver,
-		RequireJWT:       requireJWT,
-		OAuthBegin:       handlers.OAuthBegin(oauthCallbackUC),
-		OAuthCallback:    handlers.OAuthCallback(oauthCallbackUC, cfg.OAuth.RedirectURL),
-		Log:              log,
-		Secure:           secureMiddleware,
-		IPRateLimit:      ipLimit,
-		ProjectRateLimit: projectLimit,
-		Metrics:          true,
+		HealthHandler:     healthHandler,
+		UsersHandler:      usersHandler,
+		WebAuthnHandler:   webauthnHandler,
+		AdminHandler:      adminHandler,
+		Tenant:            tenantResolver,
+		RequireJWT:        requireJWT,
+		RequireAdmin:      requireAdmin,
+		OAuthBegin:        handlers.OAuthBegin(oauthCallbackUC),
+		OAuthCallback:     handlers.OAuthCallback(oauthCallbackUC, cfg.OAuth.RedirectURL),
+		Log:               log,
+		Secure:            secureMiddleware,
+		IPRateLimit:       ipLimit,
+		ProjectRateLimit:  projectLimit,
+		Metrics:           true,
 	})
 
 	srv := &http.Server{

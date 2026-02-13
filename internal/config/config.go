@@ -21,7 +21,13 @@ type Config struct {
 	PasswordReset      PasswordResetConfig
 	EmailVerification  EmailVerificationConfig
 	WebAuthn           WebAuthnConfig
-	OAuth         OAuthConfig
+	OAuth              OAuthConfig
+	Admin              AdminConfig
+}
+
+// AdminConfig for project API (create project, rotate key). If Secret is empty, admin routes return 401.
+type AdminConfig struct {
+	Secret string // X-Nonce-Admin-Secret header value; required for POST /admin/projects and POST /admin/projects/:id/rotate-key
 }
 
 type WebAuthnConfig struct {
@@ -203,6 +209,9 @@ func Load() (*Config, error) {
 			ClientID:     getEnvOrDefault("OAUTH_GOOGLE_CLIENT_ID", ""),
 			ClientSecret: getEnvOrDefault("OAUTH_GOOGLE_CLIENT_SECRET", ""),
 		},
+	}
+	cfg.Admin = AdminConfig{
+		Secret: getEnvOrDefault("NONCE_ADMIN_SECRET", ""),
 	}
 	return cfg, nil
 }

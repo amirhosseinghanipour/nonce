@@ -18,8 +18,10 @@ type UserRepository interface {
 
 // ProjectRepository defines persistence for projects (tenants).
 type ProjectRepository interface {
+	Create(ctx context.Context, project *domain.Project) error
 	GetByID(ctx context.Context, projectID domain.ProjectID) (*domain.Project, error)
 	GetByAPIKeyHash(ctx context.Context, apiKeyHash string) (*domain.Project, error)
+	UpdateAPIKeyHash(ctx context.Context, projectID domain.ProjectID, apiKeyHash string) error
 }
 
 // TokenStore defines storage for refresh tokens (Redis or DB).

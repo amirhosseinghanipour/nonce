@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/amirhosseinghanipour/nonce/internal/application/ports"
 	"github.com/amirhosseinghanipour/nonce/internal/domain"
@@ -15,6 +16,17 @@ type ProjectRepository struct {
 
 func NewProjectRepository(q *db.Queries) *ProjectRepository {
 	return &ProjectRepository{q: q}
+}
+
+func (r *ProjectRepository) Create(ctx context.Context, project *domain.Project) error {
+	_, err := r.q.CreateProject(ctx, db.CreateProjectParams{
+		ID:         project.ID.UUID,
+		Name:       project.Name,
+		ApiKeyHash: project.APIKeyHash,
+		CreatedAt:  project.CreatedAt,
+		UpdatedAt:  project.UpdatedAt,
+	})
+	return err
 }
 
 func (r *ProjectRepository) GetByID(ctx context.Context, projectID domain.ProjectID) (*domain.Project, error) {
@@ -37,6 +49,14 @@ func (r *ProjectRepository) GetByAPIKeyHash(ctx context.Context, apiKeyHash stri
 		return nil, err
 	}
 	return dbProjectToDomain(p), nil
+}
+
+func (r *ProjectRepository) UpdateAPIKeyHash(ctx context.Context, projectID domain.ProjectID, apiKeyHash string) error {
+	return r.q.UpdateProjectAPIKeyHash(ctx, db.UpdateProjectAPIKeyHashParams{
+		ID:         projectID.UUID,
+		ApiKeyHash: apiKeyHash,
+		UpdatedAt:  time.Now(),
+	})
 }
 
 func dbProjectToDomain(p db.Project) *domain.Project {

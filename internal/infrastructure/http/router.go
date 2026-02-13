@@ -17,10 +17,12 @@ type RouterConfig struct {
 	HealthHandler     *handlers.HealthHandler
 	UsersHandler      *handlers.UsersHandler
 	WebAuthnHandler   *handlers.WebAuthnHandler
+	AdminHandler      *handlers.AdminHandler
 	Tenant            *middleware.TenantResolver
 	RequireJWT        func(http.Handler) http.Handler // JWT auth for /users/* etc.
-	OAuthBegin        http.HandlerFunc               // GET /auth/:provider (tenant required)
-	OAuthCallback     http.HandlerFunc               // GET /auth/:provider/callback
+	RequireAdmin      func(http.Handler) http.Handler // X-Nonce-Admin-Secret for /admin/*
+	OAuthBegin        http.HandlerFunc                 // GET /auth/:provider (tenant required)
+	OAuthCallback     http.HandlerFunc                 // GET /auth/:provider/callback
 	Log               zerolog.Logger
 	Secure            func(http.Handler) http.Handler
 	IPRateLimit       func(http.Handler) http.Handler
@@ -109,6 +111,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Use(cfg.RequireJWT)
 			r.Get("/", cfg.UsersHandler.List)
 			r.Get("/me", cfg.UsersHandler.Me)
+		})
+	}
+
+	if cfg.AdminHandler != nil && cfg.RequireAdmin != nil {
+		r.Route("/admin", func(r chi.Router) {
+			r.Use(cfg.RequireAdmin)
+			r.Post("/projects", cfg.AdminHandler.CreateProject)
+			r.Post("/projects/{id}/rotate-key", cfg.AdminHandler.RotateProjectKey)
 		})
 	}
 

@@ -7,9 +7,43 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const createProject = `-- name: CreateProject :one
+INSERT INTO projects (id, name, api_key_hash, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, name, api_key_hash, created_at, updated_at
+`
+
+type CreateProjectParams struct {
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	ApiKeyHash string    `json:"api_key_hash"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error) {
+	row := q.db.QueryRow(ctx, createProject,
+		arg.ID,
+		arg.Name,
+		arg.ApiKeyHash,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ApiKeyHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
 
 const getProjectByAPIKeyHash = `-- name: GetProjectByAPIKeyHash :one
 SELECT id, name, api_key_hash, created_at, updated_at
@@ -47,4 +81,19 @@ func (q *Queries) GetProjectByID(ctx context.Context, id uuid.UUID) (Project, er
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateProjectAPIKeyHash = `-- name: UpdateProjectAPIKeyHash :exec
+UPDATE projects SET api_key_hash = $1, updated_at = $2 WHERE id = $3
+`
+
+type UpdateProjectAPIKeyHashParams struct {
+	ApiKeyHash string    `json:"api_key_hash"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	ID         uuid.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateProjectAPIKeyHash(ctx context.Context, arg UpdateProjectAPIKeyHashParams) error {
+	_, err := q.db.Exec(ctx, updateProjectAPIKeyHash, arg.ApiKeyHash, arg.UpdatedAt, arg.ID)
+	return err
 }
