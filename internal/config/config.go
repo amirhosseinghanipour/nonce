@@ -8,13 +8,43 @@ import (
 )
 
 type Config struct {
-	Server    ServerConfig
-	Database  DatabaseConfig
-	JWT       JWTConfig
-	Argon2    Argon2Config
-	RateLimit RateLimitConfig
-	Secure    SecureConfig
-	RLS       RLSConfig
+	Server        ServerConfig
+	Database      DatabaseConfig
+	Redis         RedisConfig
+	JWT           JWTConfig
+	Argon2        Argon2Config
+	RateLimit     RateLimitConfig
+	Secure        SecureConfig
+	RLS           RLSConfig
+	MagicLink     MagicLinkConfig
+	PasswordReset PasswordResetConfig
+	OAuth         OAuthConfig
+}
+
+type PasswordResetConfig struct {
+	BaseURL    string // e.g. https://app.example.com/reset-password (link in email)
+	ExpirySecs int64  // token TTL (e.g. 3600 = 1 hour)
+}
+
+type OAuthConfig struct {
+	CallbackBaseURL string // e.g. https://api.example.com (no trailing slash)
+	RedirectURL     string // where to send user after OAuth with tokens, e.g. https://app.example.com/auth/callback
+	SessionSecret   string // for gothic cookie store
+	Google          OAuthProviderConfig
+}
+
+type OAuthProviderConfig struct {
+	ClientID     string
+	ClientSecret string
+}
+
+type MagicLinkConfig struct {
+	BaseURL     string // e.g. https://app.example.com/auth/callback
+	ExpirySecs  int64  // token TTL
+}
+
+type RedisConfig struct {
+	URL string // optional; used for Asynq and health check
 }
 
 type RateLimitConfig struct {
@@ -70,6 +100,9 @@ func Load() (*Config, error) {
 		Database: DatabaseConfig{
 			URL: getEnvOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/nonce?sslmode=disable"),
 		},
+		Redis: RedisConfig{
+			URL: getEnvOrDefault("REDIS_URL", ""),
+		},
 		JWT: JWTConfig{
 			PrivateKeyPath: getEnvOrDefault("JWT_PRIVATE_KEY_PATH", ""),
 			Issuer:         getEnvOrDefault("JWT_ISSUER", "nonce"),
@@ -107,6 +140,29 @@ func Load() (*Config, error) {
 	}
 	cfg.RLS = RLSConfig{
 		Enabled: getEnvOrDefault("RLS_ENABLED", "false") == "true" || os.Getenv("RLS_ENABLED") == "1",
+	}
+	cfg.MagicLink = MagicLinkConfig{
+		BaseURL:    getEnvOrDefault("MAGIC_LINK_BASE_URL", "http://localhost:8080"),
+		ExpirySecs: viper.GetInt64("MAGIC_LINK_EXPIRY_SECONDS"),
+	}
+	if cfg.MagicLink.ExpirySecs <= 0 {
+		cfg.MagicLink.ExpirySecs = 900 // 15 min
+	}
+	cfg.PasswordReset = PasswordResetConfig{
+		BaseURL:    getEnvOrDefault("PASSWORD_RESET_BASE_URL", "http://localhost:3000/reset-password"),
+		ExpirySecs: viper.GetInt64("PASSWORD_RESET_EXPIRY_SECONDS"),
+	}
+	if cfg.PasswordReset.ExpirySecs <= 0 {
+		cfg.PasswordReset.ExpirySecs = 3600 // 1 hour
+	}
+	cfg.OAuth = OAuthConfig{
+		CallbackBaseURL: getEnvOrDefault("OAUTH_CALLBACK_BASE_URL", "http://localhost:8080"),
+		RedirectURL:     getEnvOrDefault("OAUTH_REDIRECT_URL", "http://localhost:3000/auth/callback"),
+		SessionSecret:   getEnvOrDefault("OAUTH_SESSION_SECRET", "nonce-oauth-secret-change-me"),
+		Google: OAuthProviderConfig{
+			ClientID:     getEnvOrDefault("OAUTH_GOOGLE_CLIENT_ID", ""),
+			ClientSecret: getEnvOrDefault("OAUTH_GOOGLE_CLIENT_SECRET", ""),
+		},
 	}
 	return cfg, nil
 }

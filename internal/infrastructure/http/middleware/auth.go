@@ -1,21 +1,13 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
 	"github.com/amirhosseinghanipour/nonce/internal/application/ports"
 )
 
-type authContextKey string
-
-const (
-	userIDContextKey    authContextKey = "user_id"
-	projectIDContextKey authContextKey = "project_id"
-)
-
-// AuthValidator validates the JWT access token and sets user/project in context for protected routes.
+// AuthValidator validates the JWT and sets user/project in context (see AuthFromContext).
 type AuthValidator struct {
 	issuer ports.TokenIssuer
 }
@@ -37,8 +29,7 @@ func (m *AuthValidator) Handler(next http.Handler) http.Handler {
 			writeErr(w, http.StatusUnauthorized, "invalid token")
 			return
 		}
-		ctx := context.WithValue(r.Context(), userIDContextKey, userID)
-		ctx = context.WithValue(ctx, projectIDContextKey, projectID)
+		ctx := WithAuth(r.Context(), projectID, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

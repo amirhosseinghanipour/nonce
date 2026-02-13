@@ -10,4 +10,6 @@ type PasswordHasher interface {
 type TokenIssuer interface {
 	IssueAccessToken(projectID, userID string, expiresInSeconds int64) (string, error)
 	ValidateAccessToken(tokenString string) (projectID, userID string, err error)
+	IssueMFAPendingToken(projectID, userID string, expiresInSeconds int64) (string, error)
+	ValidateMFAPendingToken(tokenString string) (projectID, userID string, err error)
 }

@@ -1,0 +1,256 @@
+openapi: 3.0.3
+info:
+  title: Nonce Auth API
+  description: Open-source Authentication Backend-as-a-Service (Auth BaaS). Multi-tenant, project-scoped auth.
+  version: 0.1.0
+  license:
+    name: Apache-2.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Returns service and dependency health (database, optional Redis).
+      operationId: getHealth
+      tags: [System]
+      responses:
+        "200":
+          description: All checks ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: One or more checks failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /auth/signup:
+    post:
+      summary: Register user
+      description: Create a new user for the project. Requires project API key.
+      operationId: signup
+      tags: [Auth]
+      security:
+        - ProjectKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: User already exists for this project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/login:
+    post:
+      summary: Login
+      description: Authenticate with email and password. Returns access and refresh tokens.
+      operationId: login
+      tags: [Auth]
+      security:
+        - ProjectKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/refresh:
+    post:
+      summary: Refresh tokens
+      description: Exchange a valid refresh token for a new access token and optionally a new refresh token.
+      operationId: refresh
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: New tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/logout:
+    post:
+      summary: Logout
+      description: Revoke refresh token (optional body). Returns 204.
+      operationId: logout
+      tags: [Auth]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "204":
+          description: No content
+
+components:
+  securitySchemes:
+    ProjectKey:
+      type: apiKey
+      in: header
+      name: X-Nonce-Project-Key
+      description: Project API key (or Authorization Bearer with project key)
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token for protected routes
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, unhealthy]
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+        message:
+          type: string
+
+    SignupRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          maxLength: 128
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+          maxLength: 1024
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+          description: Access token TTL in seconds
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            email:
+              type: string
+
+    RefreshResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request body or validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing or invalid project key / credentials
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

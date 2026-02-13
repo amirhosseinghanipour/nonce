@@ -1,0 +1,69 @@
+package handlers
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/google/uuid"
+
+	"github.com/amirhosseinghanipour/nonce/internal/application/ports"
+	"github.com/amirhosseinghanipour/nonce/internal/domain"
+	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/http/middleware"
+)
+
+// UsersHandler handles /users/* (e.g. GET /users/me). Requires JWT auth.
+type UsersHandler struct {
+	userRepo ports.UserRepository
+}
+
+// NewUsersHandler creates a handler for user resource endpoints.
+func NewUsersHandler(userRepo ports.UserRepository) *UsersHandler {
+	return &UsersHandler{userRepo: userRepo}
+}
+
+// MeResponse is the JSON shape for GET /users/me (no password).
+type MeResponse struct {
+	ID        string `json:"id"`
+	ProjectID string `json:"project_id"`
+	Email     string `json:"email"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+// Me returns the current user from the JWT. Requires AuthValidator middleware.
+func (h *UsersHandler) Me(w http.ResponseWriter, r *http.Request) {
+	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	if projectIDStr == "" || userIDStr == "" {
+		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	projectID, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid project id")
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	user, err := h.userRepo.GetByID(r.Context(), domain.NewProjectID(projectID), domain.NewUserID(userID))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if user == nil {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	resp := MeResponse{
+		ID:        user.ID.String(),
+		ProjectID: user.ProjectID.String(),
+		Email:     user.Email,
+		CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+}

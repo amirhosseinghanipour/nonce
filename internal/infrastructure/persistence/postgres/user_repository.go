@@ -10,7 +10,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const setProjectIDSQL = `SELECT set_config('app.current_project_id', $1, true)`
+const (
+	setProjectIDSQL    = `SELECT set_config('app.current_project_id', $1, true)`
+	updatePasswordSQL  = `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 AND project_id = $3`
+)
 
 type UserRepository struct {
 	q          *db.Queries
@@ -84,6 +87,26 @@ func (r *UserRepository) GetByID(ctx context.Context, projectID domain.ProjectID
 		return nil, err
 	}
 	return dbUserToDomain(u), nil
+}
+
+func (r *UserRepository) UpdatePassword(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, passwordHash string) error {
+	if r.rlsEnabled && r.pool != nil {
+		tx, err := r.pool.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+		if _, err := tx.Exec(ctx, setProjectIDSQL, projectID.String()); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, updatePasswordSQL, passwordHash, userID.UUID, projectID.UUID)
+		if err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+	_, err := r.pool.Exec(ctx, updatePasswordSQL, passwordHash, userID.UUID, projectID.UUID)
+	return err
 }
 
 func dbUserToDomain(u db.User) *domain.User {

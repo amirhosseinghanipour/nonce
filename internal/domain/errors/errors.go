@@ -9,4 +9,7 @@ var (
 	ErrTenantNotFound     = errors.New("project not found or invalid API key")
 	ErrUserNotFound       = errors.New("user not found")
 	ErrInvalidToken       = errors.New("invalid or expired refresh token")
+	ErrMagicLinkInvalid    = errors.New("magic link invalid, expired, or already used")
+	ErrIdentityNotFound    = errors.New("identity not found")
+	ErrPasswordResetInvalid = errors.New("password reset link invalid, expired, or already used")
 )

@@ -15,7 +15,7 @@ func NewProjectID(id uuid.UUID) ProjectID { return ProjectID{UUID: id} }
 // String returns the canonical string form.
 func (p ProjectID) String() string { return p.UUID.String() }
 
-// Project (tenant) represents a single tenant with its own users and settings.
+// Project (tenant) is a single tenant.
 type Project struct {
 	ID          ProjectID
 	Name        string

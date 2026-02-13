@@ -8,7 +8,11 @@ import (
 
 type contextKey string
 
-const projectContextKey contextKey = "project"
+const (
+	projectContextKey contextKey = "project"
+	authProjectIDKey  contextKey = "auth_project_id"
+	authUserIDKey     contextKey = "auth_user_id"
+)
 
 // WithProject injects the project into the context.
 func WithProject(ctx context.Context, project *domain.Project) context.Context {
@@ -23,4 +27,18 @@ func ProjectFromContext(ctx context.Context) *domain.Project {
 	}
 	p, _ := v.(*domain.Project)
 	return p
+}
+
+// WithAuth injects JWT-authenticated project ID and user ID into the context.
+func WithAuth(ctx context.Context, projectID, userID string) context.Context {
+	ctx = context.WithValue(ctx, authProjectIDKey, projectID)
+	ctx = context.WithValue(ctx, authUserIDKey, userID)
+	return ctx
+}
+
+// AuthFromContext returns project ID and user ID from context (set by JWT middleware), or empty strings.
+func AuthFromContext(ctx context.Context) (projectID, userID string) {
+	p, _ := ctx.Value(authProjectIDKey).(string)
+	u, _ := ctx.Value(authUserIDKey).(string)
+	return p, u
 }

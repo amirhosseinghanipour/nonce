@@ -27,6 +27,10 @@ type LoginResult struct {
 	RefreshToken string
 	ExpiresIn    int64
 	User         *domain.User
+	// MFARequired is true when user has verified TOTP; client must call POST /auth/mfa/verify with mfa_token + code.
+	MFARequired bool
+	MFAToken    string
+	MFAExpiresIn int64
 }
 
 type Login struct {
@@ -34,24 +38,31 @@ type Login struct {
 	hasher      ports.PasswordHasher
 	issuer      ports.TokenIssuer
 	tokenStore  ports.TokenStore
+	totpStore   ports.TOTPStore // optional; if set, login checks TOTP and returns mfa_required
 	accessExp   int64
 	refreshExp  int64
+	mfaPendingExp int64 // expiry for mfa_token (e.g. 300)
 }
 
-func NewLogin(users ports.UserRepository, hasher ports.PasswordHasher, issuer ports.TokenIssuer, tokenStore ports.TokenStore, accessExp, refreshExp int64) *Login {
+func NewLogin(users ports.UserRepository, hasher ports.PasswordHasher, issuer ports.TokenIssuer, tokenStore ports.TokenStore, totpStore ports.TOTPStore, accessExp, refreshExp, mfaPendingExp int64) *Login {
 	if accessExp <= 0 {
 		accessExp = DefaultAccessTokenExpiry
 	}
 	if refreshExp <= 0 {
 		refreshExp = DefaultRefreshTokenExpiry
 	}
+	if mfaPendingExp <= 0 {
+		mfaPendingExp = 300
+	}
 	return &Login{
-		users:      users,
-		hasher:     hasher,
-		issuer:     issuer,
-		tokenStore: tokenStore,
-		accessExp:  accessExp,
-		refreshExp: refreshExp,
+		users:         users,
+		hasher:        hasher,
+		issuer:        issuer,
+		tokenStore:    tokenStore,
+		totpStore:     totpStore,
+		accessExp:     accessExp,
+		refreshExp:    refreshExp,
+		mfaPendingExp: mfaPendingExp,
 	}
 }
 
@@ -62,6 +73,18 @@ func (uc *Login) Execute(ctx context.Context, input LoginInput) (*LoginResult, e
 	}
 	if user == nil || !uc.hasher.Verify(input.Password, user.PasswordHash) {
 		return nil, domerrors.ErrInvalidCredentials
+	}
+	if uc.totpStore != nil && HasVerifiedTOTP(ctx, uc.totpStore, user.ID, input.ProjectID) {
+		mfaToken, err := uc.issuer.IssueMFAPendingToken(input.ProjectID.String(), user.ID.String(), uc.mfaPendingExp)
+		if err != nil {
+			return nil, err
+		}
+		return &LoginResult{
+			MFARequired:  true,
+			MFAToken:    mfaToken,
+			MFAExpiresIn: uc.mfaPendingExp,
+			User:         user,
+		}, nil
 	}
 	accessToken, err := uc.issuer.IssueAccessToken(input.ProjectID.String(), user.ID.String(), uc.accessExp)
 	if err != nil {

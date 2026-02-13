@@ -80,6 +80,17 @@ Env (or Viper config file):
 - `RATE_LIMIT_PER_IP`, `RATE_LIMIT_PER_PROJECT` – e.g. `100-M`, `200-M` (empty = disabled)
 - `SECURE_IS_DEV` – `true` in dev (relax SSL/host), `false` in production
 - `RLS_ENABLED` – `true` to enable Row-Level Security on users (requires migration `00003_rls.sql`)
+- `REDIS_URL` – optional; for health check and Asynq (async email/webhooks)
+
+## Observability
+
+- **Health**: `GET /health` returns `{"status":"ok","checks":{"database":"ok","redis":"ok"}}` or 503 with failed checks.
+- **Metrics**: `GET /metrics` exposes Prometheus metrics (`nonce_http_request_duration_seconds`, `nonce_auth_attempts_total` by event/project/success).
+
+## API spec and SDKs
+
+- **OpenAPI**: `api/openapi.yaml` describes `/health`, `/auth/signup`, `/auth/login`, `/auth/refresh`, `/auth/logout` with request/response schemas and `X-Nonce-Project-Key` security.
+- **SDK codegen**: Generate client SDKs from the spec, e.g. `oapi-codegen -generate client -package nonce api/openapi.yaml` (Go), or use [openapi-generator](https://openapi-generator.tech/) for TypeScript/Python. Use the project API key in the `X-Nonce-Project-Key` header.
 
 ## License
 

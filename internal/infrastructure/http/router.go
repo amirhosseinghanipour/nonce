@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimid "github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/http/handlers"
@@ -13,11 +14,17 @@ import (
 
 type RouterConfig struct {
 	AuthHandler       *handlers.AuthHandler
+	HealthHandler     *handlers.HealthHandler
+	UsersHandler      *handlers.UsersHandler
 	Tenant            *middleware.TenantResolver
+	RequireJWT        func(http.Handler) http.Handler // JWT auth for /users/* etc.
+	OAuthBegin        http.HandlerFunc               // GET /auth/:provider (tenant required)
+	OAuthCallback     http.HandlerFunc               // GET /auth/:provider/callback
 	Log               zerolog.Logger
 	Secure            func(http.Handler) http.Handler
 	IPRateLimit       func(http.Handler) http.Handler
 	ProjectRateLimit  func(http.Handler) http.Handler
+	Metrics           bool // expose /metrics
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -26,6 +33,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Use(chimid.RealIP)
 	r.Use(loggerMiddleware(cfg.Log))
 	r.Use(chimid.Recoverer)
+	if cfg.Metrics {
+		r.Use(middleware.PrometheusMiddleware)
+	}
 	if cfg.Secure != nil {
 		r.Use(cfg.Secure)
 	}
@@ -35,21 +45,58 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Use(cfg.IPRateLimit)
 	}
 
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	})
+	if cfg.HealthHandler != nil {
+		r.Get("/health", cfg.HealthHandler.ServeHTTP)
+	} else {
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		})
+	}
+	if cfg.Metrics {
+		r.Handle("/metrics", promhttp.Handler())
+	}
 
 	r.Route("/auth", func(r chi.Router) {
-		r.Use(cfg.Tenant.Handler)
-		if cfg.ProjectRateLimit != nil {
-			r.Use(cfg.ProjectRateLimit)
-		}
-		r.Post("/signup", cfg.AuthHandler.Signup)
-		r.Post("/login", cfg.AuthHandler.Login)
+		// Routes that do not require project key (token in body)
 		r.Post("/refresh", cfg.AuthHandler.Refresh)
 		r.Post("/logout", cfg.AuthHandler.Logout)
+		r.Post("/magic-link/verify", cfg.AuthHandler.VerifyMagicLink)
+		r.Post("/reset-password", cfg.AuthHandler.ResetPassword)
+		r.Post("/mfa/verify", cfg.AuthHandler.MFAVerify)
+		// Routes that require project key
+		r.Group(func(r chi.Router) {
+			r.Use(cfg.Tenant.Handler)
+			if cfg.ProjectRateLimit != nil {
+				r.Use(cfg.ProjectRateLimit)
+			}
+			r.Post("/signup", cfg.AuthHandler.Signup)
+			r.Post("/login", cfg.AuthHandler.Login)
+			r.Post("/magic-link/send", cfg.AuthHandler.SendMagicLink)
+			r.Post("/forgot-password", cfg.AuthHandler.ForgotPassword)
+			if cfg.OAuthBegin != nil {
+				r.Get("/{provider}", cfg.OAuthBegin)
+			}
+		})
+		if cfg.OAuthCallback != nil {
+			r.Get("/{provider}/callback", cfg.OAuthCallback)
+		}
+		// Routes that require JWT (logged-in user)
+		if cfg.RequireJWT != nil {
+			r.Group(func(r chi.Router) {
+				r.Use(cfg.RequireJWT)
+				r.Post("/mfa/totp/setup", cfg.AuthHandler.TOTPSetup)
+				r.Post("/mfa/totp/verify", cfg.AuthHandler.TOTPVerify)
+			})
+		}
 	})
+
+	if cfg.UsersHandler != nil && cfg.RequireJWT != nil {
+		r.Route("/users", func(r chi.Router) {
+			r.Use(cfg.RequireJWT)
+			r.Get("/me", cfg.UsersHandler.Me)
+		})
+	}
 
 	return r
 }

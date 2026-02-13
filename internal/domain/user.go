@@ -15,7 +15,7 @@ func NewUserID(id uuid.UUID) UserID { return UserID{UUID: id} }
 // String returns the canonical string form.
 func (u UserID) String() string { return u.UUID.String() }
 
-// User is the core user entity (project-scoped).
+// User is a project-scoped user.
 type User struct {
 	ID           UserID
 	ProjectID    ProjectID
