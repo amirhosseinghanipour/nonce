@@ -21,31 +21,37 @@ type AuthHandler struct {
 	refresh         *auth.Refresh
 	sendMagicLink   *auth.SendMagicLink
 	verifyMagicLink *auth.VerifyMagicLink
-	forgotPassword  *auth.ForgotPassword
-	resetPassword   *auth.ResetPassword
-	issueTOTP       *auth.IssueTOTP
-	verifyTOTP      *auth.VerifyTOTP
-	verifyMFA       *auth.VerifyMFA
-	userRepo        ports.UserRepository
-	validate        *validator.Validate
-	log             zerolog.Logger
+	forgotPassword         *auth.ForgotPassword
+	resetPassword          *auth.ResetPassword
+	sendEmailVerification  *auth.SendEmailVerification
+	verifyEmail            *auth.VerifyEmail
+	issueTOTP              *auth.IssueTOTP
+	verifyTOTP              *auth.VerifyTOTP
+	verifyMFA               *auth.VerifyMFA
+	userRepo                ports.UserRepository
+	sendVerificationOnSignup bool // if true, send verification email after signup
+	validate                *validator.Validate
+	log                     zerolog.Logger
 }
 
-func NewAuthHandler(register *auth.RegisterUser, login *auth.Login, refresh *auth.Refresh, sendMagicLink *auth.SendMagicLink, verifyMagicLink *auth.VerifyMagicLink, forgotPassword *auth.ForgotPassword, resetPassword *auth.ResetPassword, issueTOTP *auth.IssueTOTP, verifyTOTP *auth.VerifyTOTP, verifyMFA *auth.VerifyMFA, userRepo ports.UserRepository, log zerolog.Logger) *AuthHandler {
+func NewAuthHandler(register *auth.RegisterUser, login *auth.Login, refresh *auth.Refresh, sendMagicLink *auth.SendMagicLink, verifyMagicLink *auth.VerifyMagicLink, forgotPassword *auth.ForgotPassword, resetPassword *auth.ResetPassword, sendEmailVerification *auth.SendEmailVerification, verifyEmail *auth.VerifyEmail, sendVerificationOnSignup bool, issueTOTP *auth.IssueTOTP, verifyTOTP *auth.VerifyTOTP, verifyMFA *auth.VerifyMFA, userRepo ports.UserRepository, log zerolog.Logger) *AuthHandler {
 	return &AuthHandler{
-		register:        register,
-		login:           login,
-		refresh:         refresh,
-		sendMagicLink:   sendMagicLink,
-		verifyMagicLink: verifyMagicLink,
-		forgotPassword:  forgotPassword,
-		resetPassword:   resetPassword,
-		issueTOTP:       issueTOTP,
-		verifyTOTP:      verifyTOTP,
-		verifyMFA:       verifyMFA,
-		userRepo:        userRepo,
-		validate:        validator.New(),
-		log:             log,
+		register:                register,
+		login:                   login,
+		refresh:                 refresh,
+		sendMagicLink:           sendMagicLink,
+		verifyMagicLink:         verifyMagicLink,
+		forgotPassword:          forgotPassword,
+		resetPassword:           resetPassword,
+		sendEmailVerification:   sendEmailVerification,
+		verifyEmail:             verifyEmail,
+		userRepo:                userRepo,
+		sendVerificationOnSignup: sendVerificationOnSignup,
+		validate:                validator.New(),
+		log:                     log,
+		issueTOTP:               issueTOTP,
+		verifyTOTP:              verifyTOTP,
+		verifyMFA:               verifyMFA,
 	}
 }
 
@@ -91,6 +97,12 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 	AuditLog(h.log, r, "user.signup", project.ID.String(), result.User.ID.String(), true, "")
 	middleware.RecordAuthAttempt("signup", project.ID.String(), true)
+	if h.sendVerificationOnSignup && h.sendEmailVerification != nil {
+		_, _ = h.sendEmailVerification.Execute(r.Context(), auth.SendEmailVerificationInput{
+			ProjectID: project.ID,
+			Email:     result.User.Email,
+		})
+	}
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"id":         result.User.ID.String(),
 		"project_id": result.User.ProjectID.String(),
@@ -363,6 +375,68 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "password has been reset"})
+}
+
+func (h *AuthHandler) SendVerificationEmail(w http.ResponseWriter, r *http.Request) {
+	if h.sendEmailVerification == nil {
+		writeErr(w, http.StatusNotImplemented, "email verification not configured")
+		return
+	}
+	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	if projectIDStr == "" || userIDStr == "" {
+		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	projectID, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid project id")
+		return
+	}
+	user, err := h.userRepo.GetByID(r.Context(), domain.NewProjectID(projectID), domain.NewUserID(uuid.MustParse(userIDStr)))
+	if err != nil || user == nil {
+		writeErr(w, http.StatusUnauthorized, "user not found")
+		return
+	}
+	_, err = h.sendEmailVerification.Execute(r.Context(), auth.SendEmailVerificationInput{
+		ProjectID: user.ProjectID,
+		Email:     user.Email,
+	})
+	if err != nil {
+		h.log.Error().Err(err).Msg("send verification email failed")
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+	writeJSON(w, http.StatusAccepted, map[string]string{"message": "if the account exists, a verification email has been sent"})
+}
+
+func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	if h.verifyEmail == nil {
+		writeErr(w, http.StatusNotImplemented, "email verification not configured")
+		return
+	}
+	var body struct {
+		Token string `json:"token" validate:"required"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if err := h.validate.Struct(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	_, err := h.verifyEmail.Execute(r.Context(), auth.VerifyEmailInput{Token: body.Token})
+	if err != nil {
+		if err == domerrors.ErrEmailVerificationInvalid {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		h.log.Error().Err(err).Msg("verify email failed")
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "email verified"})
 }
 
 func (h *AuthHandler) TOTPSetup(w http.ResponseWriter, r *http.Request) {

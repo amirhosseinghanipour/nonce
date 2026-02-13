@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/amirhosseinghanipour/nonce/internal/application/ports"
 	"github.com/amirhosseinghanipour/nonce/internal/domain"
@@ -11,8 +12,9 @@ import (
 )
 
 const (
-	setProjectIDSQL    = `SELECT set_config('app.current_project_id', $1, true)`
-	updatePasswordSQL  = `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 AND project_id = $3`
+	setProjectIDSQL      = `SELECT set_config('app.current_project_id', $1, true)`
+	updatePasswordSQL    = `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 AND project_id = $3`
+	setEmailVerifiedSQL  = `UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = $1 AND project_id = $2`
 )
 
 type UserRepository struct {
@@ -109,14 +111,40 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, projectID domain.Pr
 	return err
 }
 
+func (r *UserRepository) SetEmailVerified(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) error {
+	if r.rlsEnabled && r.pool != nil {
+		tx, err := r.pool.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+		if _, err := tx.Exec(ctx, setProjectIDSQL, projectID.String()); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, setEmailVerifiedSQL, userID.UUID, projectID.UUID)
+		if err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+	_, err := r.pool.Exec(ctx, setEmailVerifiedSQL, userID.UUID, projectID.UUID)
+	return err
+}
+
 func dbUserToDomain(u db.User) *domain.User {
+	var emailVerifiedAt *time.Time
+	if u.EmailVerifiedAt.Valid {
+		t := u.EmailVerifiedAt.Time
+		emailVerifiedAt = &t
+	}
 	return &domain.User{
-		ID:           domain.NewUserID(u.ID),
-		ProjectID:    domain.NewProjectID(u.ProjectID),
-		Email:        u.Email,
-		PasswordHash: u.PasswordHash,
-		CreatedAt:    u.CreatedAt,
-		UpdatedAt:    u.UpdatedAt,
+		ID:              domain.NewUserID(u.ID),
+		ProjectID:       domain.NewProjectID(u.ProjectID),
+		Email:           u.Email,
+		PasswordHash:    u.PasswordHash,
+		CreatedAt:       u.CreatedAt,
+		UpdatedAt:       u.UpdatedAt,
+		EmailVerifiedAt: emailVerifiedAt,
 	}
 }
 

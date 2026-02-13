@@ -12,6 +12,7 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, projectID domain.ProjectID, email string) (*domain.User, error)
 	GetByID(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) (*domain.User, error)
 	UpdatePassword(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, passwordHash string) error
+	SetEmailVerified(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) error
 }
 
 // ProjectRepository defines persistence for projects (tenants).
@@ -36,6 +37,13 @@ type MagicLinkStore interface {
 
 // PasswordResetStore defines storage for password-reset tokens (same table as magic_links with type=password_reset).
 type PasswordResetStore interface {
+	Create(ctx context.Context, projectID domain.ProjectID, email, tokenHash string, expiresAt int64) error
+	GetByTokenHash(ctx context.Context, tokenHash string) (projectID domain.ProjectID, email string, err error)
+	MarkUsed(ctx context.Context, tokenHash string) error
+}
+
+// EmailVerificationStore defines storage for email verification tokens (magic_links with type=email_verification).
+type EmailVerificationStore interface {
 	Create(ctx context.Context, projectID domain.ProjectID, email, tokenHash string, expiresAt int64) error
 	GetByTokenHash(ctx context.Context, tokenHash string) (projectID domain.ProjectID, email string, err error)
 	MarkUsed(ctx context.Context, tokenHash string) error

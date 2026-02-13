@@ -23,11 +23,12 @@ func NewUsersHandler(userRepo ports.UserRepository) *UsersHandler {
 
 // MeResponse is the JSON shape for GET /users/me (no password).
 type MeResponse struct {
-	ID        string `json:"id"`
-	ProjectID string `json:"project_id"`
-	Email     string `json:"email"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID              string  `json:"id"`
+	ProjectID       string  `json:"project_id"`
+	Email           string  `json:"email"`
+	CreatedAt       string  `json:"created_at"`
+	UpdatedAt       string  `json:"updated_at"`
+	EmailVerifiedAt *string `json:"email_verified_at,omitempty"`
 }
 
 // Me returns the current user from the JWT. Requires AuthValidator middleware.
@@ -56,12 +57,18 @@ func (h *UsersHandler) Me(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "user not found")
 		return
 	}
+	var emailVerifiedAt *string
+	if user.EmailVerifiedAt != nil {
+		t := user.EmailVerifiedAt.Format("2006-01-02T15:04:05Z07:00")
+		emailVerifiedAt = &t
+	}
 	resp := MeResponse{
-		ID:        user.ID.String(),
-		ProjectID: user.ProjectID.String(),
-		Email:     user.Email,
-		CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:              user.ID.String(),
+		ProjectID:       user.ProjectID.String(),
+		Email:           user.Email,
+		CreatedAt:       user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:       user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		EmailVerifiedAt: emailVerifiedAt,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

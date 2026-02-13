@@ -14,6 +14,7 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
+    email_verified_at TIMESTAMPTZ,
     UNIQUE(project_id, email)
 );
 

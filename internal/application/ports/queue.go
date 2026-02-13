@@ -6,5 +6,6 @@ import "context"
 type TaskEnqueuer interface {
 	EnqueueSendMagicLink(ctx context.Context, projectID, email, linkURL string) error
 	EnqueueSendPasswordReset(ctx context.Context, projectID, email, resetURL string) error
+	EnqueueSendEmailVerification(ctx context.Context, projectID, email, verifyURL string) error
 	EnqueueWebhook(ctx context.Context, event string, payload interface{}) error
 }

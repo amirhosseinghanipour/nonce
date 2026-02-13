@@ -21,6 +21,10 @@ func (q *NoopEnqueuer) EnqueueSendPasswordReset(ctx context.Context, projectID, 
 	return nil
 }
 
+func (q *NoopEnqueuer) EnqueueSendEmailVerification(ctx context.Context, projectID, email, verifyURL string) error {
+	return nil
+}
+
 func (q *NoopEnqueuer) EnqueueWebhook(ctx context.Context, event string, payload interface{}) error {
 	return nil
 }

@@ -124,6 +124,9 @@ func main() {
 	passwordResetStore := postgres.NewPasswordResetRepository(queries, pool)
 	forgotPasswordUC := auth.NewForgotPassword(passwordResetStore, userRepo, taskEnqueuer, cfg.PasswordReset.BaseURL, cfg.PasswordReset.ExpirySecs)
 	resetPasswordUC := auth.NewResetPassword(passwordResetStore, userRepo, hasher)
+	emailVerificationStore := postgres.NewEmailVerificationRepository(queries, pool)
+	sendEmailVerificationUC := auth.NewSendEmailVerification(emailVerificationStore, userRepo, taskEnqueuer, cfg.EmailVerification.BaseURL, cfg.EmailVerification.ExpirySecs)
+	verifyEmailUC := auth.NewVerifyEmail(emailVerificationStore, userRepo)
 
 	webauthnCredStore := postgres.NewWebAuthnCredentialRepository(queries, pool)
 	webauthnSvc, err := webauthnsvc.NewService(&webauthnsvc.Config{
@@ -152,7 +155,7 @@ func main() {
 	}
 	secureMiddleware := middleware.NewSecure(middleware.SecureOptions(cfg.Secure.IsDevelopment))
 
-	authHandler := handlers.NewAuthHandler(registerUC, loginUC, refreshUC, sendMagicLinkUC, verifyMagicLinkUC, forgotPasswordUC, resetPasswordUC, issueTOTPUC, verifyTOTPUC, verifyMFAUC, userRepo, log)
+	authHandler := handlers.NewAuthHandler(registerUC, loginUC, refreshUC, sendMagicLinkUC, verifyMagicLinkUC, forgotPasswordUC, resetPasswordUC, sendEmailVerificationUC, verifyEmailUC, cfg.EmailVerification.Enabled, issueTOTPUC, verifyTOTPUC, verifyMFAUC, userRepo, log)
 	usersHandler := handlers.NewUsersHandler(userRepo)
 	requireJWT := middleware.NewAuthValidator(issuer).Handler
 	router := httprouter.NewRouter(httprouter.RouterConfig{

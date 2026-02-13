@@ -17,10 +17,11 @@ func (u UserID) String() string { return u.UUID.String() }
 
 // User is a project-scoped user.
 type User struct {
-	ID           UserID
-	ProjectID    ProjectID
-	Email        string
-	PasswordHash string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID              UserID
+	ProjectID       ProjectID
+	Email           string
+	PasswordHash    string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	EmailVerifiedAt *time.Time
 }

@@ -22,6 +22,13 @@ type passwordResetPayload struct {
 	ResetURL  string `json:"reset_url"`
 }
 
+// emailVerificationPayload matches the JSON enqueued by TaskEnqueuer.EnqueueSendEmailVerification.
+type emailVerificationPayload struct {
+	ProjectID string `json:"project_id"`
+	Email     string `json:"email"`
+	VerifyURL string `json:"verify_url"`
+}
+
 // Worker runs Asynq task handlers (e.g. send magic link email).
 type Worker struct {
 	srv *asynq.Server
@@ -39,6 +46,7 @@ func NewWorker(redisOpt asynq.RedisClientOpt, log zerolog.Logger) *Worker {
 	w := &Worker{srv: srv, mux: mux, log: log}
 	mux.HandleFunc(TypeSendMagicLink, w.handleSendMagicLink)
 	mux.HandleFunc(TypeSendPasswordReset, w.handleSendPasswordReset)
+	mux.HandleFunc(TypeSendEmailVerification, w.handleSendEmailVerification)
 	mux.HandleFunc(TypeWebhook, w.handleWebhook)
 	return w
 }
@@ -69,6 +77,20 @@ func (w *Worker) handleSendPasswordReset(ctx context.Context, t *asynq.Task) err
 		Str("email", p.Email).
 		Str("reset_url", p.ResetURL).
 		Msg("password reset email (log only; configure SMTP for real email)")
+	return nil
+}
+
+func (w *Worker) handleSendEmailVerification(ctx context.Context, t *asynq.Task) error {
+	var p emailVerificationPayload
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		w.log.Error().Err(err).Msg("email verification task payload invalid")
+		return err
+	}
+	w.log.Info().
+		Str("project_id", p.ProjectID).
+		Str("email", p.Email).
+		Str("verify_url", p.VerifyURL).
+		Msg("email verification (log only; configure SMTP for real email)")
 	return nil
 }
 

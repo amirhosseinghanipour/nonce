@@ -17,9 +17,10 @@ type Config struct {
 	RateLimit     RateLimitConfig
 	Secure        SecureConfig
 	RLS           RLSConfig
-	MagicLink     MagicLinkConfig
-	PasswordReset PasswordResetConfig
-	WebAuthn      WebAuthnConfig
+	MagicLink          MagicLinkConfig
+	PasswordReset      PasswordResetConfig
+	EmailVerification  EmailVerificationConfig
+	WebAuthn           WebAuthnConfig
 	OAuth         OAuthConfig
 }
 
@@ -33,6 +34,13 @@ type WebAuthnConfig struct {
 type PasswordResetConfig struct {
 	BaseURL    string // e.g. https://app.example.com/reset-password (link in email)
 	ExpirySecs int64  // token TTL (e.g. 3600 = 1 hour)
+}
+
+// EmailVerificationConfig for optional email verification after signup.
+type EmailVerificationConfig struct {
+	BaseURL    string // e.g. https://app.example.com/verify-email (link in email)
+	ExpirySecs int64  // token TTL (e.g. 86400 = 24h)
+	Enabled    bool   // if true, send verification after signup and optionally guard routes
 }
 
 type OAuthConfig struct {
@@ -163,6 +171,14 @@ func Load() (*Config, error) {
 	}
 	if cfg.PasswordReset.ExpirySecs <= 0 {
 		cfg.PasswordReset.ExpirySecs = 3600 // 1 hour
+	}
+	cfg.EmailVerification = EmailVerificationConfig{
+		BaseURL:    getEnvOrDefault("EMAIL_VERIFICATION_BASE_URL", "http://localhost:3000/verify-email"),
+		ExpirySecs: viper.GetInt64("EMAIL_VERIFICATION_EXPIRY_SECONDS"),
+		Enabled:    getEnvOrDefault("EMAIL_VERIFICATION_ENABLED", "false") == "true" || os.Getenv("EMAIL_VERIFICATION_ENABLED") == "1",
+	}
+	if cfg.EmailVerification.ExpirySecs <= 0 {
+		cfg.EmailVerification.ExpirySecs = 86400 // 24h
 	}
 	cfg.WebAuthn = WebAuthnConfig{
 		RPID:          getEnvOrDefault("WEBAUTHN_RP_ID", "localhost"),

@@ -64,6 +64,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Post("/logout", cfg.AuthHandler.Logout)
 		r.Post("/magic-link/verify", cfg.AuthHandler.VerifyMagicLink)
 		r.Post("/reset-password", cfg.AuthHandler.ResetPassword)
+		r.Post("/verify-email", cfg.AuthHandler.VerifyEmail)
 		r.Post("/mfa/verify", cfg.AuthHandler.MFAVerify)
 		if cfg.WebAuthnHandler != nil {
 			r.Post("/webauthn/login/finish", cfg.WebAuthnHandler.LoginFinish)
@@ -92,6 +93,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		if cfg.RequireJWT != nil {
 			r.Group(func(r chi.Router) {
 				r.Use(cfg.RequireJWT)
+				r.Post("/send-verification-email", cfg.AuthHandler.SendVerificationEmail)
 				r.Post("/mfa/totp/setup", cfg.AuthHandler.TOTPSetup)
 				r.Post("/mfa/totp/verify", cfg.AuthHandler.TOTPVerify)
 				if cfg.WebAuthnHandler != nil {

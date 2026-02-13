@@ -11,5 +11,6 @@ var (
 	ErrInvalidToken       = errors.New("invalid or expired refresh token")
 	ErrMagicLinkInvalid    = errors.New("magic link invalid, expired, or already used")
 	ErrIdentityNotFound    = errors.New("identity not found")
-	ErrPasswordResetInvalid = errors.New("password reset link invalid, expired, or already used")
+	ErrPasswordResetInvalid   = errors.New("password reset link invalid, expired, or already used")
+	ErrEmailVerificationInvalid = errors.New("email verification link invalid, expired, or already used")
 )

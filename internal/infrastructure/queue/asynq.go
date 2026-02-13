@@ -10,9 +10,10 @@ import (
 )
 
 const (
-	TypeSendMagicLink     = "email:magic_link"
-	TypeSendPasswordReset = "email:password_reset"
-	TypeWebhook           = "webhook:emit"
+	TypeSendMagicLink          = "email:magic_link"
+	TypeSendPasswordReset      = "email:password_reset"
+	TypeSendEmailVerification  = "email:email_verification"
+	TypeWebhook                = "webhook:emit"
 )
 
 type TaskEnqueuer struct {
@@ -54,6 +55,21 @@ func (q *TaskEnqueuer) EnqueueSendPasswordReset(ctx context.Context, projectID, 
 	_, err := q.client.EnqueueContext(ctx, task)
 	if err != nil {
 		q.log.Warn().Err(err).Str("email", email).Msg("enqueue password reset email failed")
+		return err
+	}
+	return nil
+}
+
+func (q *TaskEnqueuer) EnqueueSendEmailVerification(ctx context.Context, projectID, email, verifyURL string) error {
+	payload, _ := json.Marshal(map[string]string{
+		"project_id": projectID,
+		"email":      email,
+		"verify_url": verifyURL,
+	})
+	task := asynq.NewTask(TypeSendEmailVerification, payload)
+	_, err := q.client.EnqueueContext(ctx, task)
+	if err != nil {
+		q.log.Warn().Err(err).Str("email", email).Msg("enqueue email verification failed")
 		return err
 	}
 	return nil
