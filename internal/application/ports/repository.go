@@ -11,6 +11,7 @@ type UserRepository interface {
 	Create(ctx context.Context, user *domain.User) error
 	GetByEmail(ctx context.Context, projectID domain.ProjectID, email string) (*domain.User, error)
 	GetByID(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) (*domain.User, error)
+	List(ctx context.Context, projectID domain.ProjectID, limit, offset int) ([]*domain.User, error)
 	UpdatePassword(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, passwordHash string) error
 	SetEmailVerified(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) error
 }

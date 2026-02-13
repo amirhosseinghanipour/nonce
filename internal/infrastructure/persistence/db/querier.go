@@ -20,6 +20,7 @@ type Querier interface {
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error)
 	GetUserByID(ctx context.Context, arg GetUserByIDParams) (User, error)
+	ListUsersByProjectID(ctx context.Context, arg ListUsersByProjectIDParams) ([]User, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -107,6 +107,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	if cfg.UsersHandler != nil && cfg.RequireJWT != nil {
 		r.Route("/users", func(r chi.Router) {
 			r.Use(cfg.RequireJWT)
+			r.Get("/", cfg.UsersHandler.List)
 			r.Get("/me", cfg.UsersHandler.Me)
 		})
 	}

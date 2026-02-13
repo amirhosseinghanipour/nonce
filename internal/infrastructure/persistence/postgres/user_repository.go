@@ -91,6 +91,25 @@ func (r *UserRepository) GetByID(ctx context.Context, projectID domain.ProjectID
 	return dbUserToDomain(u), nil
 }
 
+func (r *UserRepository) List(ctx context.Context, projectID domain.ProjectID, limit, offset int) ([]*domain.User, error) {
+	var list []*domain.User
+	err := r.runWithRLS(ctx, projectID, func(q *db.Queries) error {
+		users, e := q.ListUsersByProjectID(ctx, db.ListUsersByProjectIDParams{
+			ProjectID: projectID.UUID,
+			Limit:     int32(limit),
+			Offset:    int32(offset),
+		})
+		if e != nil {
+			return e
+		}
+		for _, u := range users {
+			list = append(list, dbUserToDomain(u))
+		}
+		return nil
+	})
+	return list, err
+}
+
 func (r *UserRepository) UpdatePassword(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, passwordHash string) error {
 	if r.rlsEnabled && r.pool != nil {
 		tx, err := r.pool.Begin(ctx)

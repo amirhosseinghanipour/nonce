@@ -100,3 +100,45 @@ func (q *Queries) GetUserByID(ctx context.Context, arg GetUserByIDParams) (User,
 	)
 	return i, err
 }
+
+const listUsersByProjectID = `-- name: ListUsersByProjectID :many
+SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at
+FROM users
+WHERE project_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListUsersByProjectIDParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	Limit     int32     `json:"limit"`
+	Offset    int32     `json:"offset"`
+}
+
+func (q *Queries) ListUsersByProjectID(ctx context.Context, arg ListUsersByProjectIDParams) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsersByProjectID, arg.ProjectID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Email,
+			&i.PasswordHash,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.EmailVerifiedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

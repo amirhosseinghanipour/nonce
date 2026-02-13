@@ -12,3 +12,10 @@ WHERE project_id = $1 AND email = $2;
 SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at
 FROM users
 WHERE project_id = $1 AND id = $2;
+
+-- name: ListUsersByProjectID :many
+SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at
+FROM users
+WHERE project_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
