@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -18,7 +19,15 @@ type Config struct {
 	RLS           RLSConfig
 	MagicLink     MagicLinkConfig
 	PasswordReset PasswordResetConfig
+	WebAuthn      WebAuthnConfig
 	OAuth         OAuthConfig
+}
+
+type WebAuthnConfig struct {
+	RPID          string   // Relying Party ID (e.g. localhost or your domain)
+	RPOrigins     []string // Allowed origins (e.g. https://app.example.com)
+	RPDisplayName string   // Display name for the RP
+	Timeout       int      // Challenge timeout in ms (optional)
 }
 
 type PasswordResetConfig struct {
@@ -155,6 +164,21 @@ func Load() (*Config, error) {
 	if cfg.PasswordReset.ExpirySecs <= 0 {
 		cfg.PasswordReset.ExpirySecs = 3600 // 1 hour
 	}
+	cfg.WebAuthn = WebAuthnConfig{
+		RPID:          getEnvOrDefault("WEBAUTHN_RP_ID", "localhost"),
+		RPDisplayName: getEnvOrDefault("WEBAUTHN_RP_DISPLAY_NAME", "Nonce"),
+		Timeout:       60000,
+	}
+	if o := os.Getenv("WEBAUTHN_RP_ORIGINS"); o != "" {
+		for _, p := range strings.Split(o, ",") {
+			if t := strings.TrimSpace(p); t != "" {
+				cfg.WebAuthn.RPOrigins = append(cfg.WebAuthn.RPOrigins, t)
+			}
+		}
+	}
+	if len(cfg.WebAuthn.RPOrigins) == 0 {
+		cfg.WebAuthn.RPOrigins = []string{getEnvOrDefault("WEBAUTHN_RP_ORIGIN", "http://localhost:3000")}
+	}
 	cfg.OAuth = OAuthConfig{
 		CallbackBaseURL: getEnvOrDefault("OAUTH_CALLBACK_BASE_URL", "http://localhost:8080"),
 		RedirectURL:     getEnvOrDefault("OAUTH_REDIRECT_URL", "http://localhost:3000/auth/callback"),
@@ -173,6 +197,7 @@ func getEnvOrDefault(key, def string) string {
 	}
 	return def
 }
+
 
 // LoadJWTPrivateKey reads the PEM file and returns its contents.
 func (c *Config) LoadJWTPrivateKey() ([]byte, error) {

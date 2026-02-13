@@ -54,3 +54,17 @@ type IdentityStore interface {
 	Create(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, provider, providerUserID string) error
 	GetUserIDByProvider(ctx context.Context, projectID domain.ProjectID, provider, providerUserID string) (domain.UserID, error)
 }
+
+// WebAuthnCredentialRow is a single stored credential for WebAuthn (ID, PublicKey, SignCount).
+type WebAuthnCredentialRow struct {
+	ID        []byte
+	PublicKey []byte
+	SignCount uint32
+}
+
+// WebAuthnCredentialStore defines storage for WebAuthn passkey credentials.
+type WebAuthnCredentialStore interface {
+	Create(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, credentialID, publicKey []byte, signCount uint32) error
+	ListByUser(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) ([]WebAuthnCredentialRow, error)
+	UpdateSignCount(ctx context.Context, projectID domain.ProjectID, credentialID []byte, signCount uint32) error
+}

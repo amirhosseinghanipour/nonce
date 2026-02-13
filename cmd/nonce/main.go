@@ -26,6 +26,7 @@ import (
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/persistence/postgres"
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/queue"
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/security"
+	webauthnsvc "github.com/amirhosseinghanipour/nonce/internal/infrastructure/webauthn"
 )
 
 func main() {
@@ -124,6 +125,17 @@ func main() {
 	forgotPasswordUC := auth.NewForgotPassword(passwordResetStore, userRepo, taskEnqueuer, cfg.PasswordReset.BaseURL, cfg.PasswordReset.ExpirySecs)
 	resetPasswordUC := auth.NewResetPassword(passwordResetStore, userRepo, hasher)
 
+	webauthnCredStore := postgres.NewWebAuthnCredentialRepository(queries, pool)
+	webauthnSvc, err := webauthnsvc.NewService(&webauthnsvc.Config{
+		RPID:          cfg.WebAuthn.RPID,
+		RPDisplayName: cfg.WebAuthn.RPDisplayName,
+		RPOrigins:     cfg.WebAuthn.RPOrigins,
+	}, webauthnCredStore, userRepo)
+	if err != nil {
+		log.Fatal().Err(err).Msg("create webauthn service")
+	}
+	webauthnHandler := handlers.NewWebAuthnHandler(webauthnSvc, issuer, tokenStore, userRepo, cfg.JWT.AccessExpiry, cfg.JWT.RefreshExpiry, log)
+
 	hashAPIKey := func(key string) string {
 		h := sha256.Sum256([]byte(key))
 		return hex.EncodeToString(h[:])
@@ -144,18 +156,19 @@ func main() {
 	usersHandler := handlers.NewUsersHandler(userRepo)
 	requireJWT := middleware.NewAuthValidator(issuer).Handler
 	router := httprouter.NewRouter(httprouter.RouterConfig{
-		AuthHandler:       authHandler,
-		HealthHandler:     healthHandler,
-		UsersHandler:      usersHandler,
-		Tenant:            tenantResolver,
-		RequireJWT:        requireJWT,
-		OAuthBegin:        handlers.OAuthBegin(oauthCallbackUC),
+		AuthHandler:      authHandler,
+		HealthHandler:    healthHandler,
+		UsersHandler:     usersHandler,
+		WebAuthnHandler:  webauthnHandler,
+		Tenant:           tenantResolver,
+		RequireJWT:       requireJWT,
+		OAuthBegin:       handlers.OAuthBegin(oauthCallbackUC),
 		OAuthCallback:    handlers.OAuthCallback(oauthCallbackUC, cfg.OAuth.RedirectURL),
-		Log:               log,
-		Secure:            secureMiddleware,
-		IPRateLimit:       ipLimit,
-		ProjectRateLimit:  projectLimit,
-		Metrics:           true,
+		Log:              log,
+		Secure:           secureMiddleware,
+		IPRateLimit:      ipLimit,
+		ProjectRateLimit: projectLimit,
+		Metrics:          true,
 	})
 
 	srv := &http.Server{

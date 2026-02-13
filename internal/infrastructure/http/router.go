@@ -16,6 +16,7 @@ type RouterConfig struct {
 	AuthHandler       *handlers.AuthHandler
 	HealthHandler     *handlers.HealthHandler
 	UsersHandler      *handlers.UsersHandler
+	WebAuthnHandler   *handlers.WebAuthnHandler
 	Tenant            *middleware.TenantResolver
 	RequireJWT        func(http.Handler) http.Handler // JWT auth for /users/* etc.
 	OAuthBegin        http.HandlerFunc               // GET /auth/:provider (tenant required)
@@ -64,6 +65,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Post("/magic-link/verify", cfg.AuthHandler.VerifyMagicLink)
 		r.Post("/reset-password", cfg.AuthHandler.ResetPassword)
 		r.Post("/mfa/verify", cfg.AuthHandler.MFAVerify)
+		if cfg.WebAuthnHandler != nil {
+			r.Post("/webauthn/login/finish", cfg.WebAuthnHandler.LoginFinish)
+		}
 		// Routes that require project key
 		r.Group(func(r chi.Router) {
 			r.Use(cfg.Tenant.Handler)
@@ -74,6 +78,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Post("/login", cfg.AuthHandler.Login)
 			r.Post("/magic-link/send", cfg.AuthHandler.SendMagicLink)
 			r.Post("/forgot-password", cfg.AuthHandler.ForgotPassword)
+			if cfg.WebAuthnHandler != nil {
+				r.Post("/webauthn/login/begin", cfg.WebAuthnHandler.LoginBegin)
+			}
 			if cfg.OAuthBegin != nil {
 				r.Get("/{provider}", cfg.OAuthBegin)
 			}
@@ -87,6 +94,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 				r.Use(cfg.RequireJWT)
 				r.Post("/mfa/totp/setup", cfg.AuthHandler.TOTPSetup)
 				r.Post("/mfa/totp/verify", cfg.AuthHandler.TOTPVerify)
+				if cfg.WebAuthnHandler != nil {
+					r.Post("/webauthn/register/begin", cfg.WebAuthnHandler.RegisterBegin)
+					r.Post("/webauthn/register/finish", cfg.WebAuthnHandler.RegisterFinish)
+				}
 			})
 		}
 	})
