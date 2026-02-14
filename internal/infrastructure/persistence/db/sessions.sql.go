@@ -65,6 +65,45 @@ func (q *Queries) GetSessionByID(ctx context.Context, id uuid.UUID) (Session, er
 	return i, err
 }
 
+const listSessionsByUser = `-- name: ListSessionsByUser :many
+SELECT id, project_id, user_id, created_at, revoked_at, revoked_reason
+FROM sessions
+WHERE project_id = $1 AND user_id = $2
+ORDER BY created_at DESC
+`
+
+type ListSessionsByUserParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) ListSessionsByUser(ctx context.Context, arg ListSessionsByUserParams) ([]Session, error) {
+	rows, err := q.db.Query(ctx, listSessionsByUser, arg.ProjectID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Session
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.UserID,
+			&i.CreatedAt,
+			&i.RevokedAt,
+			&i.RevokedReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const revokeAllRefreshTokensInSession = `-- name: RevokeAllRefreshTokensInSession :exec
 UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, NOW()) WHERE session_id = $1
 `

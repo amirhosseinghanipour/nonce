@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -11,6 +12,38 @@ import (
 	"github.com/amirhosseinghanipour/nonce/internal/domain"
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/http/middleware"
 )
+
+// requireOrgRole ensures the current user is a member of the org and has one of the allowed roles (e.g. "owner", "admin").
+// Returns false and writes 403 if not; the handler should return when false.
+func requireOrgRole(w http.ResponseWriter, r *http.Request, orgRepo ports.OrganizationRepository, oid domain.OrganizationID, allowedRoles ...string) bool {
+	_, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
+	if userIDStr == "" {
+		writeErr(w, http.StatusUnauthorized, "", "unauthorized")
+		return false
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "", "invalid user id")
+		return false
+	}
+	member, err := orgRepo.GetMember(r.Context(), oid, domain.NewUserID(userID))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
+		return false
+	}
+	if member == nil {
+		writeErr(w, http.StatusForbidden, "", "not a member of this organization")
+		return false
+	}
+	role := strings.ToLower(strings.TrimSpace(member.Role))
+	for _, allowed := range allowedRoles {
+		if role == strings.ToLower(strings.TrimSpace(allowed)) {
+			return true
+		}
+	}
+	writeErr(w, http.StatusForbidden, "", "forbidden: requires owner or admin role")
+	return false
+}
 
 // OrganizationsHandler handles /organizations/* (org-first model). Requires JWT.
 type OrganizationsHandler struct {
@@ -41,22 +74,22 @@ type MemberResponse struct {
 func (h *OrganizationsHandler) List(w http.ResponseWriter, r *http.Request) {
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
-		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		writeErr(w, http.StatusUnauthorized, "", "unauthorized")
 		return
 	}
 	projectID, err := uuid.Parse(projectIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid project id")
+		writeErr(w, http.StatusBadRequest, "", "invalid project id")
 		return
 	}
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid user id")
+		writeErr(w, http.StatusBadRequest, "", "invalid user id")
 		return
 	}
 	orgs, err := h.orgRepo.ListForUser(r.Context(), domain.NewProjectID(projectID), domain.NewUserID(userID))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	items := make([]OrgResponse, 0, len(orgs))
@@ -75,28 +108,28 @@ func (h *OrganizationsHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *OrganizationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
-		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		writeErr(w, http.StatusUnauthorized, "", "unauthorized")
 		return
 	}
 	projectID, err := uuid.Parse(projectIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid project id")
+		writeErr(w, http.StatusBadRequest, "", "invalid project id")
 		return
 	}
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid user id")
+		writeErr(w, http.StatusBadRequest, "", "invalid user id")
 		return
 	}
 	var body struct {
 		Name string `json:"name" validate:"required,max=255"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid body")
+		writeErr(w, http.StatusBadRequest, "", "invalid body")
 		return
 	}
 	if body.Name == "" {
-		writeErr(w, http.StatusBadRequest, "name required")
+		writeErr(w, http.StatusBadRequest, "", "name required")
 		return
 	}
 	org := &domain.Organization{
@@ -104,12 +137,12 @@ func (h *OrganizationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Name:      body.Name,
 	}
 	if err := h.orgRepo.Create(r.Context(), org); err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	// Add creator as first member with role "owner" (or "admin" - use a constant).
 	if err := h.orgRepo.AddMember(r.Context(), org.ID, domain.NewUserID(userID), "owner"); err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	writeJSON(w, http.StatusCreated, OrgResponse{
@@ -124,27 +157,27 @@ func (h *OrganizationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *OrganizationsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
-		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		writeErr(w, http.StatusUnauthorized, "", "unauthorized")
 		return
 	}
 	projectID, err := uuid.Parse(projectIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid project id")
+		writeErr(w, http.StatusBadRequest, "", "invalid project id")
 		return
 	}
 	orgIDStr := chi.URLParam(r, "id")
 	if orgIDStr == "" {
-		writeErr(w, http.StatusBadRequest, "organization id required")
+		writeErr(w, http.StatusBadRequest, "", "organization id required")
 		return
 	}
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid organization id")
+		writeErr(w, http.StatusBadRequest, "", "invalid organization id")
 		return
 	}
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid user id")
+		writeErr(w, http.StatusBadRequest, "", "invalid user id")
 		return
 	}
 	pid := domain.NewProjectID(projectID)
@@ -153,16 +186,16 @@ func (h *OrganizationsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Ensure user is a member.
 	member, err := h.orgRepo.GetMember(r.Context(), oid, uid)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	if member == nil {
-		writeErr(w, http.StatusForbidden, "not a member of this organization")
+		writeErr(w, http.StatusForbidden, "", "not a member of this organization")
 		return
 	}
 	org, err := h.orgRepo.GetByID(r.Context(), pid, oid)
 	if err != nil || org == nil {
-		writeErr(w, http.StatusNotFound, "organization not found")
+		writeErr(w, http.StatusNotFound, "", "organization not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, OrgResponse{
@@ -173,42 +206,38 @@ func (h *OrganizationsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// UpdateName updates an organization's name. Caller must be a member (optionally restrict to owner later).
+// UpdateName updates an organization's name. Caller must be owner or admin.
 func (h *OrganizationsHandler) UpdateName(w http.ResponseWriter, r *http.Request) {
-	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
-	if projectIDStr == "" || userIDStr == "" {
-		writeErr(w, http.StatusUnauthorized, "unauthorized")
+	projectIDStr, _, _, _ := middleware.AuthFromContext(r.Context())
+	if projectIDStr == "" {
+		writeErr(w, http.StatusUnauthorized, "", "unauthorized")
 		return
 	}
 	projectID, _ := uuid.Parse(projectIDStr)
-	userID, _ := uuid.Parse(userIDStr)
 	orgIDStr := chi.URLParam(r, "id")
 	if orgIDStr == "" {
-		writeErr(w, http.StatusBadRequest, "organization id required")
+		writeErr(w, http.StatusBadRequest, "", "organization id required")
 		return
 	}
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid organization id")
+		writeErr(w, http.StatusBadRequest, "", "invalid organization id")
+		return
+	}
+	pid := domain.NewProjectID(projectID)
+	oid := domain.NewOrganizationID(orgID)
+	if !requireOrgRole(w, r, h.orgRepo, oid, "owner", "admin") {
 		return
 	}
 	var body struct {
 		Name string `json:"name" validate:"required,max=255"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
-		writeErr(w, http.StatusBadRequest, "name required")
-		return
-	}
-	pid := domain.NewProjectID(projectID)
-	oid := domain.NewOrganizationID(orgID)
-	uid := domain.NewUserID(userID)
-	member, err := h.orgRepo.GetMember(r.Context(), oid, uid)
-	if err != nil || member == nil {
-		writeErr(w, http.StatusForbidden, "not a member of this organization")
+		writeErr(w, http.StatusBadRequest, "", "name required")
 		return
 	}
 	if err := h.orgRepo.UpdateName(r.Context(), pid, oid, body.Name); err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "updated"})
@@ -218,30 +247,30 @@ func (h *OrganizationsHandler) UpdateName(w http.ResponseWriter, r *http.Request
 func (h *OrganizationsHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
-		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		writeErr(w, http.StatusUnauthorized, "", "unauthorized")
 		return
 	}
 	userID, _ := uuid.Parse(userIDStr)
 	orgIDStr := chi.URLParam(r, "id")
 	if orgIDStr == "" {
-		writeErr(w, http.StatusBadRequest, "organization id required")
+		writeErr(w, http.StatusBadRequest, "", "organization id required")
 		return
 	}
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid organization id")
+		writeErr(w, http.StatusBadRequest, "", "invalid organization id")
 		return
 	}
 	oid := domain.NewOrganizationID(orgID)
 	uid := domain.NewUserID(userID)
 	member, err := h.orgRepo.GetMember(r.Context(), oid, uid)
 	if err != nil || member == nil {
-		writeErr(w, http.StatusForbidden, "not a member of this organization")
+		writeErr(w, http.StatusForbidden, "", "not a member of this organization")
 		return
 	}
 	members, err := h.orgRepo.ListMembers(r.Context(), oid)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	items := make([]MemberResponse, 0, len(members))
@@ -255,22 +284,20 @@ func (h *OrganizationsHandler) ListMembers(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]interface{}{"members": items})
 }
 
-// AddMember adds a user to an organization with a role.
+// AddMember adds a user to an organization with a role. Caller must be owner or admin.
 func (h *OrganizationsHandler) AddMember(w http.ResponseWriter, r *http.Request) {
-	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
-	if projectIDStr == "" || userIDStr == "" {
-		writeErr(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	userID, _ := uuid.Parse(userIDStr)
 	orgIDStr := chi.URLParam(r, "id")
 	if orgIDStr == "" {
-		writeErr(w, http.StatusBadRequest, "organization id required")
+		writeErr(w, http.StatusBadRequest, "", "organization id required")
 		return
 	}
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid organization id")
+		writeErr(w, http.StatusBadRequest, "", "invalid organization id")
+		return
+	}
+	oid := domain.NewOrganizationID(orgID)
+	if !requireOrgRole(w, r, h.orgRepo, oid, "owner", "admin") {
 		return
 	}
 	var body struct {
@@ -278,65 +305,49 @@ func (h *OrganizationsHandler) AddMember(w http.ResponseWriter, r *http.Request)
 		Role   string `json:"role"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid body")
+		writeErr(w, http.StatusBadRequest, "", "invalid body")
 		return
 	}
 	if body.UserID == "" || body.Role == "" {
-		writeErr(w, http.StatusBadRequest, "user_id and role required")
+		writeErr(w, http.StatusBadRequest, "", "user_id and role required")
 		return
 	}
 	memberUserID, err := uuid.Parse(body.UserID)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid user_id")
-		return
-	}
-	oid := domain.NewOrganizationID(orgID)
-	callerUID := domain.NewUserID(userID)
-	callerMember, err := h.orgRepo.GetMember(r.Context(), oid, callerUID)
-	if err != nil || callerMember == nil {
-		writeErr(w, http.StatusForbidden, "not a member of this organization")
+		writeErr(w, http.StatusBadRequest, "", "invalid user_id")
 		return
 	}
 	if err := h.orgRepo.AddMember(r.Context(), oid, domain.NewUserID(memberUserID), body.Role); err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"message": "member added"})
 }
 
-// RemoveMember removes a user from an organization.
+// RemoveMember removes a user from an organization. Caller must be owner or admin.
 func (h *OrganizationsHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
-	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
-	if projectIDStr == "" || userIDStr == "" {
-		writeErr(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	userID, _ := uuid.Parse(userIDStr)
 	orgIDStr := chi.URLParam(r, "id")
 	memberUserIDStr := chi.URLParam(r, "user_id")
 	if orgIDStr == "" || memberUserIDStr == "" {
-		writeErr(w, http.StatusBadRequest, "organization id and user_id required")
+		writeErr(w, http.StatusBadRequest, "", "organization id and user_id required")
 		return
 	}
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid organization id")
+		writeErr(w, http.StatusBadRequest, "", "invalid organization id")
 		return
 	}
 	memberUserID, err := uuid.Parse(memberUserIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid user_id")
+		writeErr(w, http.StatusBadRequest, "", "invalid user_id")
 		return
 	}
 	oid := domain.NewOrganizationID(orgID)
-	callerUID := domain.NewUserID(userID)
-	callerMember, err := h.orgRepo.GetMember(r.Context(), oid, callerUID)
-	if err != nil || callerMember == nil {
-		writeErr(w, http.StatusForbidden, "not a member of this organization")
+	if !requireOrgRole(w, r, h.orgRepo, oid, "owner", "admin") {
 		return
 	}
 	if err := h.orgRepo.RemoveMember(r.Context(), oid, domain.NewUserID(memberUserID)); err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

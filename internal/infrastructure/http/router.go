@@ -13,22 +13,26 @@ import (
 )
 
 type RouterConfig struct {
-	AuthHandler        *handlers.AuthHandler
-	HealthHandler      *handlers.HealthHandler
-	UsersHandler       *handlers.UsersHandler
+	AuthHandler         *handlers.AuthHandler
+	HealthHandler       *handlers.HealthHandler
+	UsersHandler        *handlers.UsersHandler
 	OrganizationsHandler *handlers.OrganizationsHandler
-	WebAuthnHandler    *handlers.WebAuthnHandler
-	AdminHandler       *handlers.AdminHandler
-	Tenant             *middleware.TenantResolver
-	RequireJWT        func(http.Handler) http.Handler // JWT auth for /users/* etc.
-	RequireAdmin      func(http.Handler) http.Handler // X-Nonce-Admin-Secret for /admin/*
-	OAuthBegin        http.HandlerFunc                 // GET /auth/:provider (tenant required)
-	OAuthCallback     http.HandlerFunc                 // GET /auth/:provider/callback
-	Log               zerolog.Logger
-	Secure            func(http.Handler) http.Handler
-	IPRateLimit       func(http.Handler) http.Handler
-	ProjectRateLimit  func(http.Handler) http.Handler
-	Metrics           bool // expose /metrics
+	WebAuthnHandler     *handlers.WebAuthnHandler
+	AdminHandler        *handlers.AdminHandler
+	Tenant              *middleware.TenantResolver
+	RequireJWT          func(http.Handler) http.Handler
+	RequireAdmin        func(http.Handler) http.Handler
+	OAuthBegin          http.HandlerFunc
+	OAuthCallback       http.HandlerFunc
+	Log                 zerolog.Logger
+	Secure              func(http.Handler) http.Handler
+	IPRateLimit         func(http.Handler) http.Handler
+	ProjectRateLimit    func(http.Handler) http.Handler
+	Metrics             bool
+	// CORS: if AllowedOrigins is non-empty, CORS middleware is applied (methods/headers have defaults).
+	CORSAllowedOrigins  []string
+	CORSAllowedMethods  []string
+	CORSAllowedHeaders  []string
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -37,6 +41,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Use(chimid.RealIP)
 	r.Use(loggerMiddleware(cfg.Log))
 	r.Use(chimid.Recoverer)
+	if len(cfg.CORSAllowedOrigins) > 0 {
+		r.Use(middleware.CORS(cfg.CORSAllowedOrigins, cfg.CORSAllowedMethods, cfg.CORSAllowedHeaders))
+	}
 	if cfg.Metrics {
 		r.Use(middleware.PrometheusMiddleware)
 	}
@@ -48,99 +55,109 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	if cfg.IPRateLimit != nil {
 		r.Use(cfg.IPRateLimit)
 	}
+	r.Use(middleware.APIVersion("v1"))
 
-	if cfg.HealthHandler != nil {
-		r.Get("/health", cfg.HealthHandler.ServeHTTP)
-	} else {
-		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"status":"ok"}`))
-		})
-	}
-	if cfg.Metrics {
-		r.Handle("/metrics", promhttp.Handler())
-	}
-
-	r.Route("/auth", func(r chi.Router) {
-		// Routes that do not require project key (token in body)
-		r.Post("/refresh", cfg.AuthHandler.Refresh)
-		r.Post("/logout", cfg.AuthHandler.Logout)
-		r.Post("/magic-link/verify", cfg.AuthHandler.VerifyMagicLink)
-		r.Post("/reset-password", cfg.AuthHandler.ResetPassword)
-		r.Post("/verify-email", cfg.AuthHandler.VerifyEmail)
-		r.Post("/mfa/verify", cfg.AuthHandler.MFAVerify)
-		if cfg.WebAuthnHandler != nil {
-			r.Post("/webauthn/login/finish", cfg.WebAuthnHandler.LoginFinish)
+	r.Route("/v1", func(r chi.Router) {
+		if cfg.HealthHandler != nil {
+			r.Get("/health", cfg.HealthHandler.ServeHTTP)
+			r.Get("/ready", cfg.HealthHandler.ServeHTTP)
+		} else {
+			r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"status":"ok"}`))
+			})
+			r.Get("/ready", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"status":"ok"}`))
+			})
 		}
-		// Routes that require project key
-		r.Group(func(r chi.Router) {
-			r.Use(cfg.Tenant.Handler)
-			if cfg.ProjectRateLimit != nil {
-				r.Use(cfg.ProjectRateLimit)
-			}
-			r.Post("/signup", cfg.AuthHandler.Signup)
-			r.Post("/login", cfg.AuthHandler.Login)
-			r.Post("/anonymous", cfg.AuthHandler.Anonymous)
-			r.Post("/magic-link/send", cfg.AuthHandler.SendMagicLink)
-			r.Post("/forgot-password", cfg.AuthHandler.ForgotPassword)
+		if cfg.Metrics {
+			r.Handle("/metrics", promhttp.Handler())
+		}
+
+		r.Route("/auth", func(r chi.Router) {
+			// Routes that do not require project key (token in body)
+			r.Post("/refresh", cfg.AuthHandler.Refresh)
+			r.Post("/logout", cfg.AuthHandler.Logout)
+			r.Post("/magic-link/verify", cfg.AuthHandler.VerifyMagicLink)
+			r.Post("/reset-password", cfg.AuthHandler.ResetPassword)
+			r.Post("/verify-email", cfg.AuthHandler.VerifyEmail)
+			r.Post("/mfa/verify", cfg.AuthHandler.MFAVerify)
 			if cfg.WebAuthnHandler != nil {
-				r.Post("/webauthn/login/begin", cfg.WebAuthnHandler.LoginBegin)
+				r.Post("/webauthn/login/finish", cfg.WebAuthnHandler.LoginFinish)
 			}
-			if cfg.OAuthBegin != nil {
-				r.Get("/{provider}", cfg.OAuthBegin)
+			// Routes that require project key
+			r.Group(func(r chi.Router) {
+				r.Use(cfg.Tenant.Handler)
+				if cfg.ProjectRateLimit != nil {
+					r.Use(cfg.ProjectRateLimit)
+				}
+				r.Post("/signup", cfg.AuthHandler.Signup)
+				r.Post("/login", cfg.AuthHandler.Login)
+				r.Post("/anonymous", cfg.AuthHandler.Anonymous)
+				r.Post("/magic-link/send", cfg.AuthHandler.SendMagicLink)
+				r.Post("/forgot-password", cfg.AuthHandler.ForgotPassword)
+				if cfg.WebAuthnHandler != nil {
+					r.Post("/webauthn/login/begin", cfg.WebAuthnHandler.LoginBegin)
+				}
+				if cfg.OAuthBegin != nil {
+					r.Get("/{provider}", cfg.OAuthBegin)
+				}
+			})
+			if cfg.OAuthCallback != nil {
+				r.Get("/{provider}/callback", cfg.OAuthCallback)
+			}
+			// Routes that require JWT (logged-in user)
+			if cfg.RequireJWT != nil {
+				r.Group(func(r chi.Router) {
+					r.Use(cfg.RequireJWT)
+					r.Post("/switch-org", cfg.AuthHandler.SwitchOrg)
+					r.Post("/send-verification-email", cfg.AuthHandler.SendVerificationEmail)
+					r.Post("/mfa/totp/setup", cfg.AuthHandler.TOTPSetup)
+					r.Post("/mfa/totp/verify", cfg.AuthHandler.TOTPVerify)
+					if cfg.WebAuthnHandler != nil {
+						r.Post("/webauthn/register/begin", cfg.WebAuthnHandler.RegisterBegin)
+						r.Post("/webauthn/register/finish", cfg.WebAuthnHandler.RegisterFinish)
+					}
+				})
 			}
 		})
-		if cfg.OAuthCallback != nil {
-			r.Get("/{provider}/callback", cfg.OAuthCallback)
-		}
-		// Routes that require JWT (logged-in user)
-		if cfg.RequireJWT != nil {
-			r.Group(func(r chi.Router) {
+
+		if cfg.OrganizationsHandler != nil && cfg.RequireJWT != nil {
+			r.Route("/organizations", func(r chi.Router) {
 				r.Use(cfg.RequireJWT)
-				r.Post("/switch-org", cfg.AuthHandler.SwitchOrg)
-				r.Post("/send-verification-email", cfg.AuthHandler.SendVerificationEmail)
-				r.Post("/mfa/totp/setup", cfg.AuthHandler.TOTPSetup)
-				r.Post("/mfa/totp/verify", cfg.AuthHandler.TOTPVerify)
-				if cfg.WebAuthnHandler != nil {
-					r.Post("/webauthn/register/begin", cfg.WebAuthnHandler.RegisterBegin)
-					r.Post("/webauthn/register/finish", cfg.WebAuthnHandler.RegisterFinish)
-				}
+				r.Get("/", cfg.OrganizationsHandler.List)
+				r.Post("/", cfg.OrganizationsHandler.Create)
+				r.Get("/{id}", cfg.OrganizationsHandler.Get)
+				r.Patch("/{id}", cfg.OrganizationsHandler.UpdateName)
+				r.Get("/{id}/members", cfg.OrganizationsHandler.ListMembers)
+				r.Post("/{id}/members", cfg.OrganizationsHandler.AddMember)
+				r.Delete("/{id}/members/{user_id}", cfg.OrganizationsHandler.RemoveMember)
+			})
+		}
+
+		if cfg.UsersHandler != nil && cfg.RequireJWT != nil {
+			r.Route("/users", func(r chi.Router) {
+				r.Use(cfg.RequireJWT)
+				r.Get("/", cfg.UsersHandler.List)
+				r.Get("/me", cfg.UsersHandler.Me)
+				r.Get("/me/export", cfg.UsersHandler.ExportMe)
+				r.Patch("/me", cfg.UsersHandler.UpdateMe)
+				r.Delete("/me", cfg.UsersHandler.DeleteMe)
+			})
+		}
+
+		if cfg.AdminHandler != nil && cfg.RequireAdmin != nil {
+			r.Route("/admin", func(r chi.Router) {
+				r.Use(cfg.RequireAdmin)
+				r.Post("/projects", cfg.AdminHandler.CreateProject)
+				r.Post("/projects/{id}/rotate-key", cfg.AdminHandler.RotateProjectKey)
+				r.Patch("/projects/{project_id}/users/{user_id}/app-metadata", cfg.AdminHandler.SetUserAppMetadata)
+				r.Get("/projects/{project_id}/users/{user_id}/sessions", cfg.AdminHandler.ListUserSessions)
+				r.Post("/projects/{project_id}/users/{user_id}/sessions/revoke", cfg.AdminHandler.RevokeUserSessions)
 			})
 		}
 	})
-
-	if cfg.OrganizationsHandler != nil && cfg.RequireJWT != nil {
-		r.Route("/organizations", func(r chi.Router) {
-			r.Use(cfg.RequireJWT)
-			r.Get("/", cfg.OrganizationsHandler.List)
-			r.Post("/", cfg.OrganizationsHandler.Create)
-			r.Get("/{id}", cfg.OrganizationsHandler.Get)
-			r.Patch("/{id}", cfg.OrganizationsHandler.UpdateName)
-			r.Get("/{id}/members", cfg.OrganizationsHandler.ListMembers)
-			r.Post("/{id}/members", cfg.OrganizationsHandler.AddMember)
-			r.Delete("/{id}/members/{user_id}", cfg.OrganizationsHandler.RemoveMember)
-		})
-	}
-
-	if cfg.UsersHandler != nil && cfg.RequireJWT != nil {
-		r.Route("/users", func(r chi.Router) {
-			r.Use(cfg.RequireJWT)
-			r.Get("/", cfg.UsersHandler.List)
-			r.Get("/me", cfg.UsersHandler.Me)
-			r.Get("/me/export", cfg.UsersHandler.ExportMe)
-			r.Patch("/me", cfg.UsersHandler.UpdateMe)
-			r.Delete("/me", cfg.UsersHandler.DeleteMe)
-		})
-	}
-
-	if cfg.AdminHandler != nil && cfg.RequireAdmin != nil {
-		r.Route("/admin", func(r chi.Router) {
-			r.Use(cfg.RequireAdmin)
-			r.Post("/projects", cfg.AdminHandler.CreateProject)
-			r.Post("/projects/{id}/rotate-key", cfg.AdminHandler.RotateProjectKey)
-			r.Patch("/projects/{project_id}/users/{user_id}/app-metadata", cfg.AdminHandler.SetUserAppMetadata)
-		})
-	}
 
 	return r
 }

@@ -7,8 +7,8 @@ info:
     name: Apache-2.0
 
 servers:
-  - url: http://localhost:8080
-    description: Local
+  - url: http://localhost:8080/v1
+    description: Local (API base path /v1)
 
 paths:
   /health:
@@ -131,6 +131,315 @@ paths:
         "204":
           description: No content
 
+  /auth/switch-org:
+    post:
+      summary: Switch organization context
+      description: Issue a new access token with org_id and role so subsequent requests are org-scoped. Requires JWT.
+      operationId: switchOrg
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SwitchOrgRequest"
+      responses:
+        "200":
+          description: New access token with org context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SwitchOrgResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Not a member of this organization
+
+  /organizations:
+    get:
+      summary: List organizations
+      description: Returns organizations the current user is a member of. Requires JWT.
+      operationId: listOrganizations
+      tags: [Organizations]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of organizations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  organizations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OrgResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      summary: Create organization
+      description: Create a new organization; creator becomes owner. Requires JWT.
+      operationId: createOrganization
+      tags: [Organizations]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrgRequest"
+      responses:
+        "201":
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /organizations/{id}:
+    get:
+      summary: Get organization
+      description: Get organization by ID. Requires JWT; user must be a member.
+      operationId: getOrganization
+      tags: [Organizations]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Organization not found
+    patch:
+      summary: Update organization name
+      description: Update organization name. Requires JWT; user must be owner or admin.
+      operationId: updateOrganization
+      tags: [Organizations]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+      responses:
+        "200":
+          description: Updated
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden (requires owner or admin)
+
+  /organizations/{id}/members:
+    get:
+      summary: List organization members
+      description: List members of the organization. Requires JWT; user must be a member.
+      operationId: listOrgMembers
+      tags: [Organizations]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of members
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  members:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MemberResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Organization not found
+    post:
+      summary: Add organization member
+      description: Add a user to the organization with a role. Requires JWT; user must be owner or admin.
+      operationId: addOrgMember
+      tags: [Organizations]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, role]
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                role:
+                  type: string
+                  enum: [owner, admin, member]
+      responses:
+        "201":
+          description: Member added
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden (requires owner or admin)
+
+  /organizations/{id}/members/{user_id}:
+    delete:
+      summary: Remove organization member
+      description: Remove a user from the organization. Requires JWT; user must be owner or admin.
+      operationId: removeOrgMember
+      tags: [Organizations]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Member removed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden (requires owner or admin)
+
+  /users/me:
+    get:
+      summary: Get current user
+      description: Returns the authenticated user (from JWT). Requires JWT.
+      operationId: getMe
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: User not found
+    patch:
+      summary: Update current user
+      description: Update current user profile (e.g. email, user_metadata). Requires JWT.
+      operationId: updateMe
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                user_metadata:
+                  type: object
+      responses:
+        "200":
+          description: Updated
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      summary: Delete current user (GDPR)
+      description: Soft-delete the current user and revoke all sessions. Requires JWT.
+      operationId: deleteMe
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: User deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/me/export:
+    get:
+      summary: Export current user data (GDPR)
+      description: Returns the current user's data for data portability. Requires JWT.
+      operationId: exportMe
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: User data export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportMeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   securitySchemes:
     ProjectKey:
@@ -234,6 +543,99 @@ components:
           type: string
         expires_in:
           type: integer
+
+    SwitchOrgRequest:
+      type: object
+      required: [organization_id]
+      properties:
+        organization_id:
+          type: string
+          format: uuid
+
+    SwitchOrgResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+        org_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+
+    OrgResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateOrgRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+
+    MemberResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    MeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        email_verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        anonymous:
+          type: boolean
+        user_metadata:
+          type: object
+        app_metadata:
+          type: object
+
+    ExportMeResponse:
+      type: object
+      properties:
+        exported_at:
+          type: string
+          format: date-time
+        data:
+          $ref: "#/components/schemas/MeResponse"
 
     Error:
       type: object

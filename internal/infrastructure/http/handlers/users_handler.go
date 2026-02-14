@@ -47,26 +47,26 @@ type ExportMeResponse struct {
 func (h *UsersHandler) Me(w http.ResponseWriter, r *http.Request) {
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
-		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		writeErr(w, http.StatusUnauthorized, "", "unauthorized")
 		return
 	}
 	projectID, err := uuid.Parse(projectIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid project id")
+		writeErr(w, http.StatusBadRequest, "", "invalid project id")
 		return
 	}
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid user id")
+		writeErr(w, http.StatusBadRequest, "", "invalid user id")
 		return
 	}
 	user, err := h.userRepo.GetByID(r.Context(), domain.NewProjectID(projectID), domain.NewUserID(userID))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	if user == nil {
-		writeErr(w, http.StatusNotFound, "user not found")
+		writeErr(w, http.StatusNotFound, "", "user not found")
 		return
 	}
 	var emailVerifiedAt *string
@@ -98,17 +98,17 @@ func (h *UsersHandler) Me(w http.ResponseWriter, r *http.Request) {
 func (h *UsersHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
-		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		writeErr(w, http.StatusUnauthorized, "", "unauthorized")
 		return
 	}
 	projectID, err := uuid.Parse(projectIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid project id")
+		writeErr(w, http.StatusBadRequest, "", "invalid project id")
 		return
 	}
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid user id")
+		writeErr(w, http.StatusBadRequest, "", "invalid user id")
 		return
 	}
 	pid := domain.NewProjectID(projectID)
@@ -117,7 +117,7 @@ func (h *UsersHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
 		_ = h.tokenStore.RevokeAllSessionsForUser(r.Context(), pid, uid, ports.RevokedReasonAdmin)
 	}
 	if err := h.userRepo.SoftDelete(r.Context(), pid, uid); err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -130,12 +130,12 @@ const maxListLimit = 100
 func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	projectIDStr, _, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" {
-		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		writeErr(w, http.StatusUnauthorized, "", "unauthorized")
 		return
 	}
 	projectID, err := uuid.Parse(projectIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid project id")
+		writeErr(w, http.StatusBadRequest, "", "invalid project id")
 		return
 	}
 	limit := defaultListLimit
@@ -155,7 +155,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	users, err := h.userRepo.List(r.Context(), domain.NewProjectID(projectID), limit, offset)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	items := make([]MeResponse, 0, len(users))
@@ -193,37 +193,37 @@ type UpdateMeRequest struct {
 func (h *UsersHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
-		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		writeErr(w, http.StatusUnauthorized, "", "unauthorized")
 		return
 	}
 	projectID, err := uuid.Parse(projectIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid project id")
+		writeErr(w, http.StatusBadRequest, "", "invalid project id")
 		return
 	}
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid user id")
+		writeErr(w, http.StatusBadRequest, "", "invalid user id")
 		return
 	}
 	var body UpdateMeRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid body")
+		writeErr(w, http.StatusBadRequest, "", "invalid body")
 		return
 	}
 	if body.UserMetadata == nil {
-		writeErr(w, http.StatusBadRequest, "user_metadata required")
+		writeErr(w, http.StatusBadRequest, "", "user_metadata required")
 		return
 	}
 	pid := domain.NewProjectID(projectID)
 	uid := domain.NewUserID(userID)
 	user, err := h.userRepo.GetByID(r.Context(), pid, uid)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	if user == nil {
-		writeErr(w, http.StatusNotFound, "user not found")
+		writeErr(w, http.StatusNotFound, "", "user not found")
 		return
 	}
 	// Merge: existing keys updated, new keys added.
@@ -237,7 +237,7 @@ func (h *UsersHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		merged[k] = v
 	}
 	if err := h.userRepo.UpdateUserMetadata(r.Context(), pid, uid, merged); err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	// Return updated user (re-fetch to get consistent view).
@@ -272,26 +272,26 @@ func (h *UsersHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 func (h *UsersHandler) ExportMe(w http.ResponseWriter, r *http.Request) {
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
-		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		writeErr(w, http.StatusUnauthorized, "", "unauthorized")
 		return
 	}
 	projectID, err := uuid.Parse(projectIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid project id")
+		writeErr(w, http.StatusBadRequest, "", "invalid project id")
 		return
 	}
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid user id")
+		writeErr(w, http.StatusBadRequest, "", "invalid user id")
 		return
 	}
 	user, err := h.userRepo.GetByID(r.Context(), domain.NewProjectID(projectID), domain.NewUserID(userID))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
 	if user == nil {
-		writeErr(w, http.StatusNotFound, "user not found")
+		writeErr(w, http.StatusNotFound, "", "user not found")
 		return
 	}
 	var emailVerifiedAt *string

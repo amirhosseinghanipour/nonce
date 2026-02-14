@@ -35,20 +35,20 @@ func OAuthBegin(oauthCallback *auth.OAuthCallback) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		project := middleware.ProjectFromContext(r.Context())
 		if project == nil {
-			writeErr(w, http.StatusUnauthorized, "project required")
+			writeErr(w, http.StatusUnauthorized, "", "project required")
 			return
 		}
 		provider := chi.URLParam(r, "provider")
 		if provider == "" {
-			writeErr(w, http.StatusBadRequest, "provider required")
+			writeErr(w, http.StatusBadRequest, "", "provider required")
 			return
 		}
 		if _, err := goth.GetProvider(provider); err != nil {
-			writeErr(w, http.StatusBadRequest, "unknown provider")
+			writeErr(w, http.StatusBadRequest, "", "unknown provider")
 			return
 		}
 		if err := gothic.StoreInSession(oauthProjectIDKey, project.ID.String(), r, w); err != nil {
-			writeErr(w, http.StatusInternalServerError, "internal error")
+			writeErr(w, http.StatusInternalServerError, "", "internal error")
 			return
 		}
 		// Gothic expects provider in query
@@ -58,7 +58,7 @@ func OAuthBegin(oauthCallback *auth.OAuthCallback) http.HandlerFunc {
 		r2.URL.RawQuery = q.Encode()
 		authURL, err := gothic.GetAuthURL(w, r2)
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, "internal error")
+			writeErr(w, http.StatusInternalServerError, "", "internal error")
 			return
 		}
 		http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
@@ -70,7 +70,7 @@ func OAuthCallback(oauthCallback *auth.OAuthCallback, redirectURL string) http.H
 	return func(w http.ResponseWriter, r *http.Request) {
 		provider := chi.URLParam(r, "provider")
 		if provider == "" {
-			writeErr(w, http.StatusBadRequest, "provider required")
+			writeErr(w, http.StatusBadRequest, "", "provider required")
 			return
 		}
 		r2 := r.Clone(r.Context())
@@ -79,17 +79,17 @@ func OAuthCallback(oauthCallback *auth.OAuthCallback, redirectURL string) http.H
 		r2.URL.RawQuery = q.Encode()
 		gothUser, err := gothic.CompleteUserAuth(w, r2)
 		if err != nil {
-			writeErr(w, http.StatusUnauthorized, "oauth failed")
+			writeErr(w, http.StatusUnauthorized, "", "oauth failed")
 			return
 		}
 		projectIDStr, err := gothic.GetFromSession(oauthProjectIDKey, r)
 		if err != nil || projectIDStr == "" {
-			writeErr(w, http.StatusBadRequest, "missing session")
+			writeErr(w, http.StatusBadRequest, "", "missing session")
 			return
 		}
 		parsed, err := uuid.Parse(projectIDStr)
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, "invalid project")
+			writeErr(w, http.StatusBadRequest, "", "invalid project")
 			return
 		}
 		projectID := domain.NewProjectID(parsed)
@@ -99,7 +99,7 @@ func OAuthCallback(oauthCallback *auth.OAuthCallback, redirectURL string) http.H
 			Email:          gothUser.Email,
 		})
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, "internal error")
+			writeErr(w, http.StatusInternalServerError, "", "internal error")
 			return
 		}
 		// Redirect to frontend with tokens in query (client should move to storage and strip URL)

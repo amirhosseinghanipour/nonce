@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 
 	"github.com/amirhosseinghanipour/nonce/internal/application/ports"
@@ -40,17 +41,17 @@ func (m *TenantResolver) Handler(next http.Handler) http.Handler {
 			}
 		}
 		if key == "" {
-			writeErr(w, http.StatusUnauthorized, "missing project key")
+			writeErrTenant(w, http.StatusUnauthorized, "unauthorized", "missing project key")
 			return
 		}
 		hash := m.hashAPIKey(key)
 		project, err := m.projects.GetByAPIKeyHash(r.Context(), hash)
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, "internal error")
+			writeErrTenant(w, http.StatusInternalServerError, "internal_error", "internal error")
 			return
 		}
 		if project == nil {
-			writeErr(w, http.StatusUnauthorized, string(domerrors.ErrTenantNotFound.Error()))
+			writeErrTenant(w, http.StatusUnauthorized, "unauthorized", string(domerrors.ErrTenantNotFound.Error()))
 			return
 		}
 		ctx := WithProject(r.Context(), project)
@@ -58,8 +59,14 @@ func (m *TenantResolver) Handler(next http.Handler) http.Handler {
 	})
 }
 
-func writeErr(w http.ResponseWriter, code int, message string) {
+func writeErrTenant(w http.ResponseWriter, code int, errCode, message string) {
+	if errCode == "" {
+		errCode = "internal_error"
+		if code == http.StatusUnauthorized {
+			errCode = "unauthorized"
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_, _ = w.Write([]byte(`{"error":"` + message + `"}`))
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message, "code": errCode})
 }

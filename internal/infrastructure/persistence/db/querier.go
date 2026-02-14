@@ -34,6 +34,7 @@ type Querier interface {
 	ListOrganizationMembers(ctx context.Context, organizationID uuid.UUID) ([]OrganizationMember, error)
 	ListOrganizationsByProjectID(ctx context.Context, arg ListOrganizationsByProjectIDParams) ([]Organization, error)
 	ListOrganizationsForUser(ctx context.Context, arg ListOrganizationsForUserParams) ([]Organization, error)
+	ListSessionsByUser(ctx context.Context, arg ListSessionsByUserParams) ([]Session, error)
 	ListUsersByProjectID(ctx context.Context, arg ListUsersByProjectIDParams) ([]User, error)
 	RemoveOrganizationMember(ctx context.Context, arg RemoveOrganizationMemberParams) error
 	RevokeAllRefreshTokensInSession(ctx context.Context, sessionID uuid.UUID) error

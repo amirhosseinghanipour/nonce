@@ -151,5 +151,30 @@ func (s *TokenStore) RevokeAllSessionsForUser(ctx context.Context, projectID dom
 	})
 }
 
+func (s *TokenStore) ListSessionsForUser(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) ([]ports.SessionInfo, error) {
+	sessions, err := s.q.ListSessionsByUser(ctx, db.ListSessionsByUserParams{
+		ProjectID: projectID.UUID,
+		UserID:    userID.UUID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ports.SessionInfo, 0, len(sessions))
+	for _, se := range sessions {
+		info := ports.SessionInfo{
+			ID:        se.ID.String(),
+			CreatedAt: se.CreatedAt,
+		}
+		if se.RevokedAt.Valid {
+			info.RevokedAt = &se.RevokedAt.Time
+		}
+		if se.RevokedReason.Valid {
+			info.RevokedReason = se.RevokedReason.String
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
 // Ensure TokenStore implements ports.TokenStore.
 var _ ports.TokenStore = (*TokenStore)(nil)

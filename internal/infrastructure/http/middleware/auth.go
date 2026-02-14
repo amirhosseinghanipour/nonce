@@ -20,13 +20,13 @@ func (m *AuthValidator) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
-			writeErr(w, http.StatusUnauthorized, "missing or invalid authorization")
+			writeErrTenant(w, http.StatusUnauthorized, "unauthorized", "missing or invalid authorization")
 			return
 		}
 		tokenString := strings.TrimPrefix(auth, "Bearer ")
 		projectID, userID, orgID, role, err := m.issuer.ValidateAccessToken(tokenString)
 		if err != nil {
-			writeErr(w, http.StatusUnauthorized, "invalid token")
+			writeErrTenant(w, http.StatusUnauthorized, "invalid_token", "invalid token")
 			return
 		}
 		ctx := WithAuth(r.Context(), projectID, userID, orgID, role)

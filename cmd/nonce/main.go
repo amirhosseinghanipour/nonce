@@ -18,15 +18,18 @@ import (
 	"github.com/amirhosseinghanipour/nonce/internal/application/auth"
 	"github.com/amirhosseinghanipour/nonce/internal/application/ports"
 	"github.com/amirhosseinghanipour/nonce/internal/application/project"
+	"github.com/amirhosseinghanipour/nonce/internal/application/retention"
 	"github.com/amirhosseinghanipour/nonce/internal/config"
 	infraauth "github.com/amirhosseinghanipour/nonce/internal/infrastructure/auth"
 	httprouter "github.com/amirhosseinghanipour/nonce/internal/infrastructure/http"
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/http/handlers"
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/http/middleware"
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/persistence/db"
+	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/lockout"
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/persistence/postgres"
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/queue"
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/security"
+	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/webhook"
 	webauthnsvc "github.com/amirhosseinghanipour/nonce/internal/infrastructure/webauthn"
 )
 
@@ -149,7 +152,7 @@ func main() {
 	tenantResolver := middleware.NewTenantResolver(projectRepo, hashAPIKey)
 	createProjectUC := project.NewCreateProject(projectRepo, hashAPIKey)
 	rotateProjectKeyUC := project.NewRotateProjectKey(projectRepo, hashAPIKey)
-	adminHandler := handlers.NewAdminHandler(createProjectUC, rotateProjectKeyUC, userRepo, log)
+	adminHandler := handlers.NewAdminHandler(createProjectUC, rotateProjectKeyUC, userRepo, tokenStore, log)
 	requireAdmin := middleware.RequireAdminSecret(cfg.Admin.Secret)
 
 	ipLimit, err := middleware.NewIPRateLimiter(cfg.RateLimit.RatePerIP)
@@ -162,27 +165,40 @@ func main() {
 	}
 	secureMiddleware := middleware.NewSecure(middleware.SecureOptions(cfg.Secure.IsDevelopment))
 
-	authHandler := handlers.NewAuthHandler(registerUC, loginUC, refreshUC, sendMagicLinkUC, verifyMagicLinkUC, forgotPasswordUC, resetPasswordUC, sendEmailVerificationUC, verifyEmailUC, signInAnonymousUC, cfg.EmailVerification.Enabled, issueTOTPUC, verifyTOTPUC, verifyMFAUC, userRepo, tokenStore, orgRepo, issuer, cfg.JWT.AccessExpiry, log)
+	var lockoutStore ports.LoginLockoutStore
+	if cfg.Lockout.MaxAttempts > 0 {
+		lockoutStore = lockout.NewMemoryStore(cfg.Lockout.MaxAttempts, cfg.Lockout.CooldownSeconds)
+	}
+	var webhookEmitter ports.WebhookEmitter
+	if cfg.Webhook.URL != "" {
+		webhookEmitter = webhook.NewHTTPEmitter(cfg.Webhook.URL)
+	} else {
+		webhookEmitter = webhook.NewNoopEmitter()
+	}
+	authHandler := handlers.NewAuthHandler(registerUC, loginUC, refreshUC, sendMagicLinkUC, verifyMagicLinkUC, forgotPasswordUC, resetPasswordUC, sendEmailVerificationUC, verifyEmailUC, signInAnonymousUC, cfg.EmailVerification.Enabled, issueTOTPUC, verifyTOTPUC, verifyMFAUC, userRepo, tokenStore, orgRepo, issuer, cfg.JWT.AccessExpiry, lockoutStore, webhookEmitter, log)
 	usersHandler := handlers.NewUsersHandler(userRepo, tokenStore)
 	organizationsHandler := handlers.NewOrganizationsHandler(orgRepo)
 	requireJWT := middleware.NewAuthValidator(issuer).Handler
 	router := httprouter.NewRouter(httprouter.RouterConfig{
-		AuthHandler:         authHandler,
-		HealthHandler:       healthHandler,
-		UsersHandler:        usersHandler,
+		AuthHandler:          authHandler,
+		HealthHandler:        healthHandler,
+		UsersHandler:         usersHandler,
 		OrganizationsHandler: organizationsHandler,
-		WebAuthnHandler:     webauthnHandler,
-		AdminHandler:        adminHandler,
-		Tenant:            tenantResolver,
-		RequireJWT:        requireJWT,
-		RequireAdmin:      requireAdmin,
-		OAuthBegin:        handlers.OAuthBegin(oauthCallbackUC),
-		OAuthCallback:     handlers.OAuthCallback(oauthCallbackUC, cfg.OAuth.RedirectURL),
-		Log:               log,
-		Secure:            secureMiddleware,
-		IPRateLimit:       ipLimit,
-		ProjectRateLimit:  projectLimit,
-		Metrics:           true,
+		WebAuthnHandler:      webauthnHandler,
+		AdminHandler:         adminHandler,
+		Tenant:               tenantResolver,
+		RequireJWT:           requireJWT,
+		RequireAdmin:         requireAdmin,
+		OAuthBegin:           handlers.OAuthBegin(oauthCallbackUC),
+		OAuthCallback:        handlers.OAuthCallback(oauthCallbackUC, cfg.OAuth.RedirectURL),
+		Log:                  log,
+		Secure:               secureMiddleware,
+		IPRateLimit:          ipLimit,
+		ProjectRateLimit:     projectLimit,
+		Metrics:              true,
+		CORSAllowedOrigins:   cfg.CORS.AllowedOrigins,
+		CORSAllowedMethods:   cfg.CORS.AllowedMethods,
+		CORSAllowedHeaders:   cfg.CORS.AllowedHeaders,
 	})
 
 	srv := &http.Server{
@@ -192,6 +208,9 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	defer cancelRun()
+
 	go func() {
 		log.Info().Str("port", cfg.Server.Port).Msg("server starting")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -199,17 +218,43 @@ func main() {
 		}
 	}()
 
+	if cfg.DataRetention.AnonymizeAfterDays > 0 {
+		go func() {
+			ticker := time.NewTicker(24 * time.Hour)
+			defer ticker.Stop()
+			for {
+				n, err := retention.RunAnonymizeDeletedUsers(runCtx, userRepo, cfg.DataRetention.AnonymizeAfterDays)
+				if err != nil {
+					log.Error().Err(err).Msg("retention anonymize")
+				} else if n > 0 {
+					log.Info().Int("anonymized", n).Msg("retention anonymized deleted users")
+				}
+				select {
+				case <-runCtx.Done():
+					return
+				case <-ticker.C:
+					// next run
+				}
+			}
+		}()
+	}
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Info().Msg("shutting down")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	cancelRun()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("server shutdown")
 	}
 	if asynqWorker != nil {
 		asynqWorker.Shutdown()
+	}
+	pool.Close()
+	if redisClient != nil {
+		_ = redisClient.Close()
 	}
 	log.Info().Msg("server stopped")
 }

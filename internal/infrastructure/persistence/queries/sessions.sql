@@ -8,6 +8,12 @@ SELECT id, project_id, user_id, created_at, revoked_at, revoked_reason
 FROM sessions
 WHERE id = $1;
 
+-- name: ListSessionsByUser :many
+SELECT id, project_id, user_id, created_at, revoked_at, revoked_reason
+FROM sessions
+WHERE project_id = $1 AND user_id = $2
+ORDER BY created_at DESC;
+
 -- name: RevokeSessionByID :exec
 UPDATE sessions SET revoked_at = COALESCE(revoked_at, NOW()), revoked_reason = $2 WHERE id = $1;
 

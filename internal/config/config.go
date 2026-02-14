@@ -24,6 +24,27 @@ type Config struct {
 	OAuth              OAuthConfig
 	Admin              AdminConfig
 	DataRetention      DataRetentionConfig
+	Lockout            LockoutConfig
+	CORS               CORSConfig
+	Webhook            WebhookConfig
+}
+
+// WebhookConfig for audit event webhook (POST to customer endpoint).
+type WebhookConfig struct {
+	URL string // WEBHOOK_URL; empty = no webhook
+}
+
+// CORSConfig for Access-Control-* headers (web clients).
+type CORSConfig struct {
+	AllowedOrigins []string // e.g. https://app.example.com (empty = CORS disabled)
+	AllowedMethods []string // e.g. GET, POST, PATCH, DELETE, OPTIONS
+	AllowedHeaders []string // e.g. Authorization, Content-Type, X-Nonce-Project-Key
+}
+
+// LockoutConfig for login account lockout after N failed attempts.
+type LockoutConfig struct {
+	MaxAttempts     int // lock after this many failed logins (0 = disabled)
+	CooldownSeconds int // cooldown duration when locked
 }
 
 // DataRetentionConfig for soft-deleted user anonymization. Run retention job periodically (e.g. cron).
@@ -222,6 +243,29 @@ func Load() (*Config, error) {
 	}
 	cfg.DataRetention = DataRetentionConfig{
 		AnonymizeAfterDays: viper.GetInt("DATA_RETENTION_ANONYMIZE_AFTER_DAYS"),
+	}
+	cfg.Lockout = LockoutConfig{
+		MaxAttempts:     viper.GetInt("LOCKOUT_MAX_ATTEMPTS"),
+		CooldownSeconds: viper.GetInt("LOCKOUT_COOLDOWN_SECONDS"),
+	}
+	if cfg.Lockout.MaxAttempts > 0 && cfg.Lockout.CooldownSeconds <= 0 {
+		cfg.Lockout.CooldownSeconds = 900 // 15 min default
+	}
+	if o := os.Getenv("CORS_ALLOWED_ORIGINS"); o != "" {
+		for _, s := range strings.Split(o, ",") {
+			if t := strings.TrimSpace(s); t != "" {
+				cfg.CORS.AllowedOrigins = append(cfg.CORS.AllowedOrigins, t)
+			}
+		}
+	}
+	if len(cfg.CORS.AllowedMethods) == 0 {
+		cfg.CORS.AllowedMethods = []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"}
+	}
+	if len(cfg.CORS.AllowedHeaders) == 0 {
+		cfg.CORS.AllowedHeaders = []string{"Authorization", "Content-Type", "X-Nonce-Project-Key", "X-WebAuthn-Session-ID"}
+	}
+	cfg.Webhook = WebhookConfig{
+		URL: getEnvOrDefault("WEBHOOK_URL", ""),
 	}
 	return cfg, nil
 }

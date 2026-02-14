@@ -69,6 +69,14 @@ const (
 	RevokedReasonSuspiciousActivity = "suspicious_activity"
 )
 
+// SessionInfo is a row returned by ListSessionsForUser (admin session list).
+type SessionInfo struct {
+	ID            string
+	CreatedAt     time.Time
+	RevokedAt     *time.Time
+	RevokedReason string
+}
+
 // TokenStore defines storage for sessions and refresh tokens.
 type TokenStore interface {
 	CreateSession(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) (sessionID string, err error)
@@ -79,6 +87,7 @@ type TokenStore interface {
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	RevokeSession(ctx context.Context, sessionID string, reason string) error
 	RevokeAllSessionsForUser(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, reason string) error
+	ListSessionsForUser(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) ([]SessionInfo, error)
 }
 
 // MagicLinkStore defines storage for passwordless magic links.
