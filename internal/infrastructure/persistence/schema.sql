@@ -18,6 +18,7 @@ CREATE TABLE users (
     is_anonymous BOOLEAN NOT NULL DEFAULT false,
     user_metadata JSONB NOT NULL DEFAULT '{}',
     app_metadata JSONB NOT NULL DEFAULT '{}',
+    deleted_at TIMESTAMPTZ,
     UNIQUE(project_id, email)
 );
 

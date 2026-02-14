@@ -112,7 +112,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			r.Use(cfg.RequireJWT)
 			r.Get("/", cfg.UsersHandler.List)
 			r.Get("/me", cfg.UsersHandler.Me)
+			r.Get("/me/export", cfg.UsersHandler.ExportMe)
 			r.Patch("/me", cfg.UsersHandler.UpdateMe)
+			r.Delete("/me", cfg.UsersHandler.DeleteMe)
 		})
 	}
 

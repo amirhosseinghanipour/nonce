@@ -9,13 +9,14 @@ import (
 	"github.com/amirhosseinghanipour/nonce/internal/domain"
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/persistence/db"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
-	setProjectIDSQL      = `SELECT set_config('app.current_project_id', $1, true)`
-	updatePasswordSQL    = `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 AND project_id = $3`
-	setEmailVerifiedSQL  = `UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = $1 AND project_id = $2`
+	setProjectIDSQL     = `SELECT set_config('app.current_project_id', $1, true)`
+	updatePasswordSQL   = `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 AND project_id = $3 AND deleted_at IS NULL`
+	setEmailVerifiedSQL = `UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = $1 AND project_id = $2 AND deleted_at IS NULL`
 )
 
 type UserRepository struct {
@@ -172,6 +173,41 @@ func (r *UserRepository) UpdateAppMetadata(ctx context.Context, projectID domain
 			ID:          userID.UUID,
 		})
 	})
+}
+
+func (r *UserRepository) SoftDelete(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) error {
+	return r.runWithRLS(ctx, projectID, func(q *db.Queries) error {
+		return q.SoftDeleteUser(ctx, db.SoftDeleteUserParams{ProjectID: projectID.UUID, ID: userID.UUID})
+	})
+}
+
+func (r *UserRepository) Anonymize(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) error {
+	return r.runWithRLS(ctx, projectID, func(q *db.Queries) error {
+		return q.AnonymizeUser(ctx, db.AnonymizeUserParams{ProjectID: projectID.UUID, ID: userID.UUID})
+	})
+}
+
+func (r *UserRepository) ListDeletedBefore(ctx context.Context, threshold time.Time) ([]ports.DeletedUserRef, error) {
+	// Bypass RLS: retention job runs in admin context
+	var deletedAt pgtype.Timestamptz
+	deletedAt.Time = threshold
+	deletedAt.Valid = true
+	rows, err := r.q.GetUsersDeletedBefore(ctx, deletedAt)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ports.DeletedUserRef, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, ports.DeletedUserRef{
+			ProjectID: domain.NewProjectID(row.ProjectID),
+			UserID:    domain.NewUserID(row.ID),
+		})
+	}
+	return out, nil
+}
+
+func (r *UserRepository) HardDelete(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) error {
+	return r.q.HardDeleteUser(ctx, db.HardDeleteUserParams{ProjectID: projectID.UUID, ID: userID.UUID})
 }
 
 func dbUserToDomain(u db.User) *domain.User {

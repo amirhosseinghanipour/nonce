@@ -7,7 +7,7 @@ import (
 	"github.com/amirhosseinghanipour/nonce/internal/domain"
 )
 
-// UserRepository defines persistence for users (project-scoped).
+// UserRepository defines persistence for users (project-scoped). Soft delete: use SoftDelete; anonymization and retention use Anonymize and ListDeletedBefore.
 type UserRepository interface {
 	Create(ctx context.Context, user *domain.User) error
 	GetByEmail(ctx context.Context, projectID domain.ProjectID, email string) (*domain.User, error)
@@ -17,6 +17,16 @@ type UserRepository interface {
 	SetEmailVerified(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) error
 	UpdateUserMetadata(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, metadata map[string]interface{}) error
 	UpdateAppMetadata(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, metadata map[string]interface{}) error
+	SoftDelete(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) error
+	Anonymize(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) error
+	ListDeletedBefore(ctx context.Context, threshold time.Time) ([]DeletedUserRef, error)
+	HardDelete(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) error
+}
+
+// DeletedUserRef is a (project_id, user_id) reference for retention/cleanup.
+type DeletedUserRef struct {
+	ProjectID domain.ProjectID
+	UserID    domain.UserID
 }
 
 // ProjectRepository defines persistence for projects (tenants).

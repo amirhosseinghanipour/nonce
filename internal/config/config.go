@@ -23,6 +23,13 @@ type Config struct {
 	WebAuthn           WebAuthnConfig
 	OAuth              OAuthConfig
 	Admin              AdminConfig
+	DataRetention      DataRetentionConfig
+}
+
+// DataRetentionConfig for soft-deleted user anonymization. Run retention job periodically (e.g. cron).
+type DataRetentionConfig struct {
+	// AnonymizeAfterDays: users with deleted_at older than this are anonymized (PII cleared). 0 = disabled.
+	AnonymizeAfterDays int
 }
 
 // AdminConfig for project API (create project, rotate key). If Secret is empty, admin routes return 401.
@@ -212,6 +219,9 @@ func Load() (*Config, error) {
 	}
 	cfg.Admin = AdminConfig{
 		Secret: getEnvOrDefault("NONCE_ADMIN_SECRET", ""),
+	}
+	cfg.DataRetention = DataRetentionConfig{
+		AnonymizeAfterDays: viper.GetInt("DATA_RETENTION_ANONYMIZE_AFTER_DAYS"),
 	}
 	return cfg, nil
 }

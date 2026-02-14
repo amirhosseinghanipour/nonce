@@ -10,12 +10,34 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const anonymizeUser = `-- name: AnonymizeUser :exec
+UPDATE users SET
+  email = 'deleted-' || id::text || '@anonymized.local',
+  password_hash = '',
+  user_metadata = '{}',
+  app_metadata = '{}',
+  updated_at = NOW(),
+  deleted_at = COALESCE(deleted_at, NOW())
+WHERE project_id = $1 AND id = $2
+`
+
+type AnonymizeUserParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	ID        uuid.UUID `json:"id"`
+}
+
+func (q *Queries) AnonymizeUser(ctx context.Context, arg AnonymizeUserParams) error {
+	_, err := q.db.Exec(ctx, anonymizeUser, arg.ProjectID, arg.ID)
+	return err
+}
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, project_id, email, password_hash, created_at, updated_at, is_anonymous, user_metadata, app_metadata)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous, user_metadata, app_metadata
+RETURNING id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous, user_metadata, app_metadata, deleted_at
 `
 
 type CreateUserParams struct {
@@ -54,14 +76,15 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.IsAnonymous,
 		&i.UserMetadata,
 		&i.AppMetadata,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous, user_metadata, app_metadata
+SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous, user_metadata, app_metadata, deleted_at
 FROM users
-WHERE project_id = $1 AND email = $2
+WHERE project_id = $1 AND email = $2 AND deleted_at IS NULL
 `
 
 type GetUserByEmailParams struct {
@@ -83,14 +106,15 @@ func (q *Queries) GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) 
 		&i.IsAnonymous,
 		&i.UserMetadata,
 		&i.AppMetadata,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous, user_metadata, app_metadata
+SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous, user_metadata, app_metadata, deleted_at
 FROM users
-WHERE project_id = $1 AND id = $2
+WHERE project_id = $1 AND id = $2 AND deleted_at IS NULL
 `
 
 type GetUserByIDParams struct {
@@ -112,14 +136,58 @@ func (q *Queries) GetUserByID(ctx context.Context, arg GetUserByIDParams) (User,
 		&i.IsAnonymous,
 		&i.UserMetadata,
 		&i.AppMetadata,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
+const getUsersDeletedBefore = `-- name: GetUsersDeletedBefore :many
+SELECT id, project_id FROM users WHERE deleted_at IS NOT NULL AND deleted_at <= $1
+`
+
+type GetUsersDeletedBeforeRow struct {
+	ID        uuid.UUID `json:"id"`
+	ProjectID uuid.UUID `json:"project_id"`
+}
+
+func (q *Queries) GetUsersDeletedBefore(ctx context.Context, deletedAt pgtype.Timestamptz) ([]GetUsersDeletedBeforeRow, error) {
+	rows, err := q.db.Query(ctx, getUsersDeletedBefore, deletedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsersDeletedBeforeRow
+	for rows.Next() {
+		var i GetUsersDeletedBeforeRow
+		if err := rows.Scan(&i.ID, &i.ProjectID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const hardDeleteUser = `-- name: HardDeleteUser :exec
+DELETE FROM users WHERE project_id = $1 AND id = $2 AND deleted_at IS NOT NULL
+`
+
+type HardDeleteUserParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	ID        uuid.UUID `json:"id"`
+}
+
+func (q *Queries) HardDeleteUser(ctx context.Context, arg HardDeleteUserParams) error {
+	_, err := q.db.Exec(ctx, hardDeleteUser, arg.ProjectID, arg.ID)
+	return err
+}
+
 const listUsersByProjectID = `-- name: ListUsersByProjectID :many
-SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous, user_metadata, app_metadata
+SELECT id, project_id, email, password_hash, created_at, updated_at, email_verified_at, is_anonymous, user_metadata, app_metadata, deleted_at
 FROM users
-WHERE project_id = $1
+WHERE project_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
 `
@@ -150,6 +218,7 @@ func (q *Queries) ListUsersByProjectID(ctx context.Context, arg ListUsersByProje
 			&i.IsAnonymous,
 			&i.UserMetadata,
 			&i.AppMetadata,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -161,8 +230,22 @@ func (q *Queries) ListUsersByProjectID(ctx context.Context, arg ListUsersByProje
 	return items, nil
 }
 
+const softDeleteUser = `-- name: SoftDeleteUser :exec
+UPDATE users SET deleted_at = COALESCE(deleted_at, NOW()) WHERE project_id = $1 AND id = $2
+`
+
+type SoftDeleteUserParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	ID        uuid.UUID `json:"id"`
+}
+
+func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) error {
+	_, err := q.db.Exec(ctx, softDeleteUser, arg.ProjectID, arg.ID)
+	return err
+}
+
 const updateAppMetadata = `-- name: UpdateAppMetadata :exec
-UPDATE users SET app_metadata = $1, updated_at = NOW() WHERE project_id = $2 AND id = $3
+UPDATE users SET app_metadata = $1, updated_at = NOW() WHERE project_id = $2 AND id = $3 AND deleted_at IS NULL
 `
 
 type UpdateAppMetadataParams struct {
@@ -177,7 +260,7 @@ func (q *Queries) UpdateAppMetadata(ctx context.Context, arg UpdateAppMetadataPa
 }
 
 const updateUserMetadata = `-- name: UpdateUserMetadata :exec
-UPDATE users SET user_metadata = $1, updated_at = NOW() WHERE project_id = $2 AND id = $3
+UPDATE users SET user_metadata = $1, updated_at = NOW() WHERE project_id = $2 AND id = $3 AND deleted_at IS NULL
 `
 
 type UpdateUserMetadataParams struct {

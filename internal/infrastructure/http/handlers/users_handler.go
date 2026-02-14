@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -14,12 +15,13 @@ import (
 
 // UsersHandler handles /users/* (e.g. GET /users/me). Requires JWT auth.
 type UsersHandler struct {
-	userRepo ports.UserRepository
+	userRepo   ports.UserRepository
+	tokenStore ports.TokenStore // optional; used by DeleteMe to revoke all sessions
 }
 
-// NewUsersHandler creates a handler for user resource endpoints.
-func NewUsersHandler(userRepo ports.UserRepository) *UsersHandler {
-	return &UsersHandler{userRepo: userRepo}
+// NewUsersHandler creates a handler for user resource endpoints. tokenStore may be nil; then DeleteMe only soft-deletes.
+func NewUsersHandler(userRepo ports.UserRepository, tokenStore ports.TokenStore) *UsersHandler {
+	return &UsersHandler{userRepo: userRepo, tokenStore: tokenStore}
 }
 
 // MeResponse is the JSON shape for GET /users/me (no password).
@@ -33,6 +35,12 @@ type MeResponse struct {
 	IsAnonymous     bool                   `json:"anonymous"`
 	UserMetadata    map[string]interface{} `json:"user_metadata,omitempty"`
 	AppMetadata     map[string]interface{} `json:"app_metadata,omitempty"`
+}
+
+// ExportMeResponse is the GDPR data export payload (GET /users/me/export). Same as MeResponse plus export metadata.
+type ExportMeResponse struct {
+	ExportedAt string                 `json:"exported_at"` // ISO8601
+	Data       MeResponse             `json:"data"`
 }
 
 // Me returns the current user from the JWT. Requires AuthValidator middleware.
@@ -84,6 +92,35 @@ func (h *UsersHandler) Me(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// DeleteMe soft-deletes the current user (GDPR right to erasure) and revokes all their sessions. Requires JWT.
+func (h *UsersHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
+	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	if projectIDStr == "" || userIDStr == "" {
+		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	projectID, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid project id")
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	pid := domain.NewProjectID(projectID)
+	uid := domain.NewUserID(userID)
+	if h.tokenStore != nil {
+		_ = h.tokenStore.RevokeAllSessionsForUser(r.Context(), pid, uid, ports.RevokedReasonAdmin)
+	}
+	if err := h.userRepo.SoftDelete(r.Context(), pid, uid); err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 const defaultListLimit = 20
@@ -228,5 +265,60 @@ func (h *UsersHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		IsAnonymous:     user.IsAnonymous,
 		UserMetadata:    user.UserMetadata,
 		AppMetadata:     user.AppMetadata,
+	})
+}
+
+// ExportMe returns the current user's data for GDPR/right-to-data-portability. Requires JWT.
+func (h *UsersHandler) ExportMe(w http.ResponseWriter, r *http.Request) {
+	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	if projectIDStr == "" || userIDStr == "" {
+		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	projectID, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid project id")
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	user, err := h.userRepo.GetByID(r.Context(), domain.NewProjectID(projectID), domain.NewUserID(userID))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if user == nil {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	var emailVerifiedAt *string
+	if user.EmailVerifiedAt != nil {
+		t := user.EmailVerifiedAt.Format("2006-01-02T15:04:05Z07:00")
+		emailVerifiedAt = &t
+	}
+	email := user.Email
+	if user.IsAnonymous {
+		email = ""
+	}
+	now := time.Now().UTC().Format("2006-01-02T15:04:05Z07:00")
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", `attachment; filename="user-data-export.json"`)
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(ExportMeResponse{
+		ExportedAt: now,
+		Data: MeResponse{
+			ID:              user.ID.String(),
+			ProjectID:       user.ProjectID.String(),
+			Email:           email,
+			CreatedAt:       user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:       user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			EmailVerifiedAt: emailVerifiedAt,
+			IsAnonymous:     user.IsAnonymous,
+			UserMetadata:    user.UserMetadata,
+			AppMetadata:     user.AppMetadata,
+		},
 	})
 }

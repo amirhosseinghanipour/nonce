@@ -8,9 +8,11 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
+	AnonymizeUser(ctx context.Context, arg AnonymizeUserParams) error
 	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
@@ -22,12 +24,15 @@ type Querier interface {
 	GetSessionByID(ctx context.Context, id uuid.UUID) (Session, error)
 	GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error)
 	GetUserByID(ctx context.Context, arg GetUserByIDParams) (User, error)
+	GetUsersDeletedBefore(ctx context.Context, deletedAt pgtype.Timestamptz) ([]GetUsersDeletedBeforeRow, error)
+	HardDeleteUser(ctx context.Context, arg HardDeleteUserParams) error
 	ListUsersByProjectID(ctx context.Context, arg ListUsersByProjectIDParams) ([]User, error)
 	RevokeAllRefreshTokensInSession(ctx context.Context, sessionID uuid.UUID) error
 	RevokeRefreshTokensByUserSessions(ctx context.Context, arg RevokeRefreshTokensByUserSessionsParams) error
 	RevokeSessionByID(ctx context.Context, arg RevokeSessionByIDParams) error
 	RevokeSessionsByUser(ctx context.Context, arg RevokeSessionsByUserParams) error
 	SetRefreshTokenRevoked(ctx context.Context, id uuid.UUID) error
+	SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) error
 	UpdateAppMetadata(ctx context.Context, arg UpdateAppMetadataParams) error
 	UpdateProjectAPIKeyHash(ctx context.Context, arg UpdateProjectAPIKeyHashParams) error
 	UpdateUserMetadata(ctx context.Context, arg UpdateUserMetadataParams) error

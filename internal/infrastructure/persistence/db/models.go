@@ -51,4 +51,5 @@ type User struct {
 	IsAnonymous     bool               `json:"is_anonymous"`
 	UserMetadata    []byte             `json:"user_metadata"`
 	AppMetadata     []byte             `json:"app_metadata"`
+	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
 }
