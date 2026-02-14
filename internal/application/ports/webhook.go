@@ -12,7 +12,7 @@ type AuditEvent struct {
 	Err       string
 }
 
-// WebhookEmitter sends audit events to an external endpoint. TODO: implement.
+// WebhookEmitter sends audit events to an external endpoint.
 type WebhookEmitter interface {
 	Emit(ctx context.Context, event AuditEvent) error
 }

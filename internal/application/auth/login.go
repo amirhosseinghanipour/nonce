@@ -3,16 +3,17 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"time"
 
 	"github.com/amirhosseinghanipour/nonce/internal/application/ports"
-	domerrors "github.com/amirhosseinghanipour/nonce/internal/domain/errors"
 	"github.com/amirhosseinghanipour/nonce/internal/domain"
+	domerrors "github.com/amirhosseinghanipour/nonce/internal/domain/errors"
 )
 
 const (
-	DefaultAccessTokenExpiry  = 900   // 15 min
+	DefaultAccessTokenExpiry  = 900    // 15 min
 	DefaultRefreshTokenExpiry = 604800 // 7 days
 )
 
@@ -28,19 +29,19 @@ type LoginResult struct {
 	ExpiresIn    int64
 	User         *domain.User
 	// MFARequired is true when user has verified TOTP; client must call POST /auth/mfa/verify with mfa_token + code.
-	MFARequired bool
-	MFAToken    string
+	MFARequired  bool
+	MFAToken     string
 	MFAExpiresIn int64
 }
 
 type Login struct {
-	users       ports.UserRepository
-	hasher      ports.PasswordHasher
-	issuer      ports.TokenIssuer
-	tokenStore  ports.TokenStore
-	totpStore   ports.TOTPStore // optional; if set, login checks TOTP and returns mfa_required
-	accessExp   int64
-	refreshExp  int64
+	users         ports.UserRepository
+	hasher        ports.PasswordHasher
+	issuer        ports.TokenIssuer
+	tokenStore    ports.TokenStore
+	totpStore     ports.TOTPStore // optional; if set, login checks TOTP and returns mfa_required
+	accessExp     int64
+	refreshExp    int64
 	mfaPendingExp int64 // expiry for mfa_token (e.g. 300)
 }
 
@@ -81,7 +82,7 @@ func (uc *Login) Execute(ctx context.Context, input LoginInput) (*LoginResult, e
 		}
 		return &LoginResult{
 			MFARequired:  true,
-			MFAToken:    mfaToken,
+			MFAToken:     mfaToken,
 			MFAExpiresIn: uc.mfaPendingExp,
 			User:         user,
 		}, nil
@@ -108,8 +109,8 @@ func (uc *Login) Execute(ctx context.Context, input LoginInput) (*LoginResult, e
 	}, nil
 }
 
-// hashForStorage returns a value to store for refresh token lookup.
-// TODO: store SHA256(token) instead of plain token.
+// hashForStorage returns SHA256(token) hex for refresh token lookup.
 func hashForStorage(token string) string {
-	return token
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
 }

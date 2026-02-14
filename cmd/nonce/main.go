@@ -161,7 +161,7 @@ func main() {
 	}
 	secureMiddleware := middleware.NewSecure(middleware.SecureOptions(cfg.Secure.IsDevelopment))
 
-	authHandler := handlers.NewAuthHandler(registerUC, loginUC, refreshUC, sendMagicLinkUC, verifyMagicLinkUC, forgotPasswordUC, resetPasswordUC, sendEmailVerificationUC, verifyEmailUC, signInAnonymousUC, cfg.EmailVerification.Enabled, issueTOTPUC, verifyTOTPUC, verifyMFAUC, userRepo, log)
+	authHandler := handlers.NewAuthHandler(registerUC, loginUC, refreshUC, sendMagicLinkUC, verifyMagicLinkUC, forgotPasswordUC, resetPasswordUC, sendEmailVerificationUC, verifyEmailUC, signInAnonymousUC, cfg.EmailVerification.Enabled, issueTOTPUC, verifyTOTPUC, verifyMFAUC, userRepo, tokenStore, log)
 	usersHandler := handlers.NewUsersHandler(userRepo)
 	requireJWT := middleware.NewAuthValidator(issuer).Handler
 	router := httprouter.NewRouter(httprouter.RouterConfig{

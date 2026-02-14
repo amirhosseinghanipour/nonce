@@ -79,7 +79,7 @@ func (uc *VerifyMFA) Execute(ctx context.Context, input VerifyMFAInput) (*Verify
 		return nil, err
 	}
 	refreshToken := hex.EncodeToString(refreshRaw)
-	refreshHash := refreshToken // TODO: hash for storage
+	refreshHash := hashForStorage(refreshToken)
 	expiresAt := time.Now().Add(time.Duration(uc.refreshExp) * time.Second).Unix()
 	if err := uc.tokenStore.StoreRefreshToken(ctx, pid, uid, nil, refreshHash, expiresAt); err != nil {
 		return nil, err

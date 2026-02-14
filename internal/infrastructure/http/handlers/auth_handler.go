@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 
@@ -30,12 +32,13 @@ type AuthHandler struct {
 	verifyTOTP              *auth.VerifyTOTP
 	verifyMFA               *auth.VerifyMFA
 	userRepo                ports.UserRepository
+	tokenStore              ports.TokenStore
 	sendVerificationOnSignup bool // if true, send verification email after signup
 	validate                *validator.Validate
 	log                     zerolog.Logger
 }
 
-func NewAuthHandler(register *auth.RegisterUser, login *auth.Login, refresh *auth.Refresh, sendMagicLink *auth.SendMagicLink, verifyMagicLink *auth.VerifyMagicLink, forgotPassword *auth.ForgotPassword, resetPassword *auth.ResetPassword, sendEmailVerification *auth.SendEmailVerification, verifyEmail *auth.VerifyEmail, signInAnonymous *auth.SignInAnonymous, sendVerificationOnSignup bool, issueTOTP *auth.IssueTOTP, verifyTOTP *auth.VerifyTOTP, verifyMFA *auth.VerifyMFA, userRepo ports.UserRepository, log zerolog.Logger) *AuthHandler {
+func NewAuthHandler(register *auth.RegisterUser, login *auth.Login, refresh *auth.Refresh, sendMagicLink *auth.SendMagicLink, verifyMagicLink *auth.VerifyMagicLink, forgotPassword *auth.ForgotPassword, resetPassword *auth.ResetPassword, sendEmailVerification *auth.SendEmailVerification, verifyEmail *auth.VerifyEmail, signInAnonymous *auth.SignInAnonymous, sendVerificationOnSignup bool, issueTOTP *auth.IssueTOTP, verifyTOTP *auth.VerifyTOTP, verifyMFA *auth.VerifyMFA, userRepo ports.UserRepository, tokenStore ports.TokenStore, log zerolog.Logger) *AuthHandler {
 	return &AuthHandler{
 		register:                register,
 		login:                   login,
@@ -48,6 +51,7 @@ func NewAuthHandler(register *auth.RegisterUser, login *auth.Login, refresh *aut
 		verifyEmail:             verifyEmail,
 		signInAnonymous:         signInAnonymous,
 		userRepo:                userRepo,
+		tokenStore:              tokenStore,
 		sendVerificationOnSignup: sendVerificationOnSignup,
 		validate:                validator.New(),
 		log:                     log,
@@ -252,8 +256,9 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		RefreshToken string `json:"refresh_token"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
-	if body.RefreshToken != "" {
-		// TODO: revoke refresh token in store
+	if body.RefreshToken != "" && h.tokenStore != nil {
+		hash := refreshTokenHashForLookup(body.RefreshToken)
+		_ = h.tokenStore.RevokeRefreshToken(r.Context(), hash)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -625,4 +630,10 @@ func (h *AuthHandler) MFAVerify(w http.ResponseWriter, r *http.Request) {
 			"email": result.User.Email,
 		},
 	})
+}
+
+// refreshTokenHashForLookup returns SHA256(token) hex for refresh token lookup/revoke; must match auth.hashForStorage.
+func refreshTokenHashForLookup(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
 }
