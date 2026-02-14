@@ -29,7 +29,7 @@ type RouterConfig struct {
 	IPRateLimit         func(http.Handler) http.Handler
 	ProjectRateLimit    func(http.Handler) http.Handler
 	Metrics             bool
-	// CORS: if AllowedOrigins is non-empty, CORS middleware is applied (methods/headers have defaults).
+	// CORS: when AllowedOrigins is set, CORS middleware is applied with configured methods and headers.
 	CORSAllowedOrigins  []string
 	CORSAllowedMethods  []string
 	CORSAllowedHeaders  []string

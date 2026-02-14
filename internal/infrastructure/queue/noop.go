@@ -6,7 +6,7 @@ import (
 	"github.com/amirhosseinghanipour/nonce/internal/application/ports"
 )
 
-// NoopEnqueuer is a no-op enqueuer when Redis/Asynq is not configured.
+// NoopEnqueuer discards enqueue calls when Redis/Asynq is not configured.
 type NoopEnqueuer struct{}
 
 func NewNoopEnqueuer() *NoopEnqueuer {

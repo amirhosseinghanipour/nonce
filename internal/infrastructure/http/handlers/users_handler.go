@@ -16,10 +16,10 @@ import (
 // UsersHandler handles /users/* (e.g. GET /users/me). Requires JWT auth.
 type UsersHandler struct {
 	userRepo   ports.UserRepository
-	tokenStore ports.TokenStore // optional; used by DeleteMe to revoke all sessions
+	tokenStore ports.TokenStore // required for production: revokes all sessions on DeleteMe; may be nil in tests
 }
 
-// NewUsersHandler creates a handler for user resource endpoints. tokenStore may be nil; then DeleteMe only soft-deletes.
+// NewUsersHandler creates the handler for user resource endpoints. tokenStore is required for production (session revocation on DeleteMe); may be nil only in tests.
 func NewUsersHandler(userRepo ports.UserRepository, tokenStore ports.TokenStore) *UsersHandler {
 	return &UsersHandler{userRepo: userRepo, tokenStore: tokenStore}
 }
@@ -76,7 +76,7 @@ func (h *UsersHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 	email := user.Email
 	if user.IsAnonymous {
-		email = "" // don't expose placeholder email
+		email = "" // anonymous users: do not expose internal placeholder email
 	}
 	resp := MeResponse{
 		ID:              user.ID.String(),
@@ -126,7 +126,7 @@ func (h *UsersHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
 const defaultListLimit = 20
 const maxListLimit = 100
 
-// List returns project-scoped users with optional limit/offset. Requires JWT (project from token).
+// List returns project-scoped users; query params limit and offset are supported. Requires JWT (project from token).
 func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	projectIDStr, _, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" {

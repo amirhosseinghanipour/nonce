@@ -6,7 +6,7 @@ import (
 )
 
 // CORS returns a middleware that sets Access-Control-* headers and handles OPTIONS preflight.
-// If allowedOrigins is empty, the middleware is a no-op.
+// When allowedOrigins is empty, CORS is disabled (middleware passes through without adding headers).
 func CORS(allowedOrigins, allowedMethods, allowedHeaders []string) func(next http.Handler) http.Handler {
 	originsSet := make(map[string]bool)
 	for _, o := range allowedOrigins {

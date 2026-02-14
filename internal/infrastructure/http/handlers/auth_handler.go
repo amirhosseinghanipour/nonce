@@ -215,7 +215,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Anonymous(w http.ResponseWriter, r *http.Request) {
 	if h.signInAnonymous == nil {
-		writeErr(w, http.StatusNotImplemented, "", "anonymous sign-in not configured")
+		writeErr(w, http.StatusNotImplemented, "", "anonymous sign-in is disabled")
 		return
 	}
 	project := middleware.ProjectFromContext(r.Context())
@@ -297,7 +297,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 // SwitchOrg issues a new access token with org context (org_id, role) so subsequent requests are org-scoped. Requires JWT.
 func (h *AuthHandler) SwitchOrg(w http.ResponseWriter, r *http.Request) {
 	if h.orgRepo == nil || h.issuer == nil {
-		writeErr(w, http.StatusNotImplemented, "", "organizations not configured")
+		writeErr(w, http.StatusNotImplemented, "", "organizations are disabled")
 		return
 	}
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
@@ -358,7 +358,7 @@ func (h *AuthHandler) SwitchOrg(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) SendMagicLink(w http.ResponseWriter, r *http.Request) {
 	if h.sendMagicLink == nil {
-		writeErr(w, http.StatusNotImplemented, "", "magic link not configured")
+		writeErr(w, http.StatusNotImplemented, "", "magic link is disabled")
 		return
 	}
 	project := middleware.ProjectFromContext(r.Context())
@@ -401,7 +401,7 @@ func (h *AuthHandler) SendMagicLink(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) VerifyMagicLink(w http.ResponseWriter, r *http.Request) {
 	if h.verifyMagicLink == nil {
-		writeErr(w, http.StatusNotImplemented, "", "magic link not configured")
+		writeErr(w, http.StatusNotImplemented, "", "magic link is disabled")
 		return
 	}
 	var body struct {
@@ -438,7 +438,7 @@ func (h *AuthHandler) VerifyMagicLink(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	if h.forgotPassword == nil {
-		writeErr(w, http.StatusNotImplemented, "", "password reset not configured")
+		writeErr(w, http.StatusNotImplemented, "", "password reset is disabled")
 		return
 	}
 	project := middleware.ProjectFromContext(r.Context())
@@ -477,7 +477,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	if h.resetPassword == nil {
-		writeErr(w, http.StatusNotImplemented, "", "password reset not configured")
+		writeErr(w, http.StatusNotImplemented, "", "password reset is disabled")
 		return
 	}
 	var body struct {
@@ -515,7 +515,7 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) SendVerificationEmail(w http.ResponseWriter, r *http.Request) {
 	if h.sendEmailVerification == nil {
-		writeErr(w, http.StatusNotImplemented, "", "email verification not configured")
+		writeErr(w, http.StatusNotImplemented, "", "email verification is disabled")
 		return
 	}
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
@@ -548,7 +548,7 @@ func (h *AuthHandler) SendVerificationEmail(w http.ResponseWriter, r *http.Reque
 
 func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	if h.verifyEmail == nil {
-		writeErr(w, http.StatusNotImplemented, "", "email verification not configured")
+		writeErr(w, http.StatusNotImplemented, "", "email verification is disabled")
 		return
 	}
 	var body struct {
@@ -577,7 +577,7 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) TOTPSetup(w http.ResponseWriter, r *http.Request) {
 	if h.issueTOTP == nil {
-		writeErr(w, http.StatusNotImplemented, "", "totp not configured")
+		writeErr(w, http.StatusNotImplemented, "", "TOTP is disabled")
 		return
 	}
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
@@ -634,7 +634,7 @@ func (h *AuthHandler) TOTPSetup(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) TOTPVerify(w http.ResponseWriter, r *http.Request) {
 	if h.verifyTOTP == nil {
-		writeErr(w, http.StatusNotImplemented, "", "totp not configured")
+		writeErr(w, http.StatusNotImplemented, "", "TOTP is disabled")
 		return
 	}
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
@@ -686,7 +686,7 @@ func (h *AuthHandler) TOTPVerify(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) MFAVerify(w http.ResponseWriter, r *http.Request) {
 	if h.verifyMFA == nil {
-		writeErr(w, http.StatusNotImplemented, "", "mfa not configured")
+		writeErr(w, http.StatusNotImplemented, "", "MFA is disabled")
 		return
 	}
 	var body struct {

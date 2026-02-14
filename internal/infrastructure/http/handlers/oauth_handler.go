@@ -102,7 +102,7 @@ func OAuthCallback(oauthCallback *auth.OAuthCallback, redirectURL string) http.H
 			writeErr(w, http.StatusInternalServerError, "", "internal error")
 			return
 		}
-		// Redirect to frontend with tokens in query (client should move to storage and strip URL)
+		// Redirect to frontend with tokens in query; production clients must store tokens securely and strip from URL
 		u, _ := url.Parse(redirectURL)
 		uq := u.Query()
 		uq.Set("access_token", result.AccessToken)

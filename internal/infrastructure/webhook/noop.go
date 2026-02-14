@@ -6,7 +6,7 @@ import (
 	"github.com/amirhosseinghanipour/nonce/internal/application/ports"
 )
 
-// NoopEmitter is a no-op webhook emitter when no webhook URL is configured.
+// NoopEmitter discards audit events when WEBHOOK_URL is not set.
 type NoopEmitter struct{}
 
 // NewNoopEmitter returns a WebhookEmitter that discards all events.

@@ -13,7 +13,7 @@ type entry struct {
 	lockedUntil time.Time
 }
 
-// MemoryStore is an in-memory LoginLockoutStore (single instance; use Redis for multi-instance).
+// MemoryStore is an in-memory LoginLockoutStore suitable for single-instance deployment. For multi-instance, use a shared store (e.g. Redis).
 type MemoryStore struct {
 	mu     sync.RWMutex
 	data   map[string]*entry
@@ -56,7 +56,7 @@ func (s *MemoryStore) IsLocked(ctx context.Context, projectID, email string) (lo
 		}
 		return true, secs
 	}
-	// cooldown expired; clear so next attempt can count again (optional: keep failures and only clear on success)
+	// Cooldown expired; account is unlocked. Failure count is reset on next RecordFailure or cleared on RecordSuccess.
 	return false, 0
 }
 
@@ -72,7 +72,7 @@ func (s *MemoryStore) RecordFailure(ctx context.Context, projectID, email string
 		e = &entry{}
 		s.data[k] = e
 	}
-	// if was locked and cooldown expired, reset failures
+	// If cooldown expired, reset failure count so lockout can apply again after max attempts.
 	now := time.Now()
 	if now.After(e.lockedUntil) {
 		e.failures = 0

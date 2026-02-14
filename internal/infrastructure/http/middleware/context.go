@@ -31,7 +31,7 @@ func ProjectFromContext(ctx context.Context) *domain.Project {
 	return p
 }
 
-// WithAuth injects JWT-authenticated project ID, user ID, and optionally org ID and role into the context.
+// WithAuth injects JWT-authenticated project ID, user ID, and org ID/role (when org-scoped) into the context.
 func WithAuth(ctx context.Context, projectID, userID, orgID, role string) context.Context {
 	ctx = context.WithValue(ctx, authProjectIDKey, projectID)
 	ctx = context.WithValue(ctx, authUserIDKey, userID)

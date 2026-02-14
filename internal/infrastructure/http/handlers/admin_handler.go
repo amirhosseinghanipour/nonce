@@ -163,7 +163,7 @@ func (h *AdminHandler) ListUserSessions(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if h.tokenStore == nil {
-		writeErr(w, http.StatusNotImplemented, "", "sessions not available")
+		writeErr(w, http.StatusNotImplemented, "", "session management is disabled")
 		return
 	}
 	sessions, err := h.tokenStore.ListSessionsForUser(r.Context(), domain.NewProjectID(projectID), domain.NewUserID(userID))
@@ -189,7 +189,7 @@ func (h *AdminHandler) ListUserSessions(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"sessions": items})
 }
 
-// RevokeUserSessions handles POST /admin/projects/:project_id/users/:user_id/sessions/revoke. Body: { "session_id": "optional" }. If session_id omitted, revokes all sessions for the user.
+// RevokeUserSessions handles POST /admin/projects/:project_id/users/:user_id/sessions/revoke. Body: { "session_id": "<uuid>" } to revoke one session, or omit to revoke all sessions for the user.
 func (h *AdminHandler) RevokeUserSessions(w http.ResponseWriter, r *http.Request) {
 	projectIDStr := chi.URLParam(r, "project_id")
 	userIDStr := chi.URLParam(r, "user_id")
@@ -208,7 +208,7 @@ func (h *AdminHandler) RevokeUserSessions(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if h.tokenStore == nil {
-		writeErr(w, http.StatusNotImplemented, "", "sessions not available")
+		writeErr(w, http.StatusNotImplemented, "", "session management is disabled")
 		return
 	}
 	var body struct {

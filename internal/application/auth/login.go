@@ -39,7 +39,7 @@ type Login struct {
 	hasher        ports.PasswordHasher
 	issuer        ports.TokenIssuer
 	tokenStore    ports.TokenStore
-	totpStore     ports.TOTPStore // optional; if set, login checks TOTP and returns mfa_required
+	totpStore     ports.TOTPStore // when set, login enforces TOTP and returns mfa_required when pending
 	accessExp     int64
 	refreshExp    int64
 	mfaPendingExp int64 // expiry for mfa_token (e.g. 300)

@@ -13,8 +13,15 @@ import (
 	"github.com/amirhosseinghanipour/nonce/internal/infrastructure/http/middleware"
 )
 
-// requireOrgRole ensures the current user is a member of the org and has one of the allowed roles (e.g. "owner", "admin").
-// Returns false and writes 403 if not; the handler should return when false.
+// Reserved organization roles. Only owner and admin can update org, add/remove members.
+const (
+	OrgRoleOwner  = "owner"
+	OrgRoleAdmin  = "admin"
+	OrgRoleMember = "member"
+)
+
+// requireOrgRole ensures the current user is a member of the org and has one of the allowed roles (e.g. OrgRoleOwner, OrgRoleAdmin).
+// Returns false and writes 403 if the user lacks an allowed role; caller must return when false.
 func requireOrgRole(w http.ResponseWriter, r *http.Request, orgRepo ports.OrganizationRepository, oid domain.OrganizationID, allowedRoles ...string) bool {
 	_, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if userIDStr == "" {
@@ -104,7 +111,7 @@ func (h *OrganizationsHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"organizations": items})
 }
 
-// Create creates a new organization and adds the creator as first member with role "owner".
+// Create creates a new organization and adds the creator as first member with role OrgRoleOwner.
 func (h *OrganizationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
@@ -140,8 +147,7 @@ func (h *OrganizationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
-	// Add creator as first member with role "owner" (or "admin" - use a constant).
-	if err := h.orgRepo.AddMember(r.Context(), org.ID, domain.NewUserID(userID), "owner"); err != nil {
+	if err := h.orgRepo.AddMember(r.Context(), org.ID, domain.NewUserID(userID), OrgRoleOwner); err != nil {
 		writeErr(w, http.StatusInternalServerError, "", "internal error")
 		return
 	}
@@ -226,7 +232,7 @@ func (h *OrganizationsHandler) UpdateName(w http.ResponseWriter, r *http.Request
 	}
 	pid := domain.NewProjectID(projectID)
 	oid := domain.NewOrganizationID(orgID)
-	if !requireOrgRole(w, r, h.orgRepo, oid, "owner", "admin") {
+	if !requireOrgRole(w, r, h.orgRepo, oid, OrgRoleOwner, OrgRoleAdmin) {
 		return
 	}
 	var body struct {
@@ -297,7 +303,7 @@ func (h *OrganizationsHandler) AddMember(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	oid := domain.NewOrganizationID(orgID)
-	if !requireOrgRole(w, r, h.orgRepo, oid, "owner", "admin") {
+	if !requireOrgRole(w, r, h.orgRepo, oid, OrgRoleOwner, OrgRoleAdmin) {
 		return
 	}
 	var body struct {
@@ -343,7 +349,7 @@ func (h *OrganizationsHandler) RemoveMember(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	oid := domain.NewOrganizationID(orgID)
-	if !requireOrgRole(w, r, h.orgRepo, oid, "owner", "admin") {
+	if !requireOrgRole(w, r, h.orgRepo, oid, OrgRoleOwner, OrgRoleAdmin) {
 		return
 	}
 	if err := h.orgRepo.RemoveMember(r.Context(), oid, domain.NewUserID(memberUserID)); err != nil {

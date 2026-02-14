@@ -11,7 +11,7 @@ type TokenIssuer interface {
 	IssueAccessToken(projectID, userID string, expiresInSeconds int64) (string, error)
 	// IssueAccessTokenWithOrg issues a token with org context (org_id, role) for org-scoped access.
 	IssueAccessTokenWithOrg(projectID, userID, orgID, role string, expiresInSeconds int64) (string, error)
-	// ValidateAccessToken returns projectID, userID, and optionally orgID, role (empty if not org-scoped).
+	// ValidateAccessToken returns projectID, userID, and orgID/role when org-scoped (empty otherwise).
 	ValidateAccessToken(tokenString string) (projectID, userID, orgID, role string, err error)
 	IssueMFAPendingToken(projectID, userID string, expiresInSeconds int64) (string, error)
 	ValidateMFAPendingToken(tokenString string) (projectID, userID string, err error)

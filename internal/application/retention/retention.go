@@ -8,7 +8,7 @@ import (
 )
 
 // RunAnonymizeDeletedUsers finds users soft-deleted before (now - anonymizeAfterDays) and anonymizes their PII.
-// Call periodically (e.g. daily cron). anonymizeAfterDays 0 = no-op.
+// Call periodically (e.g. daily via scheduler). anonymizeAfterDays <= 0 skips processing.
 func RunAnonymizeDeletedUsers(ctx context.Context, userRepo ports.UserRepository, anonymizeAfterDays int) (anonymized int, err error) {
 	if anonymizeAfterDays <= 0 {
 		return 0, nil

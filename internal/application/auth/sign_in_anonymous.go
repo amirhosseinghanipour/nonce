@@ -55,7 +55,7 @@ func NewSignInAnonymous(users ports.UserRepository, issuer ports.TokenIssuer, to
 func (uc *SignInAnonymous) Execute(ctx context.Context, input SignInAnonymousInput) (*SignInAnonymousResult, error) {
 	id := uuid.New()
 	now := time.Now()
-	// Placeholder email unique per user so (project_id, email) is unique.
+	// Synthetic email unique per user so (project_id, email) remains unique; never exposed to clients.
 	email := fmt.Sprintf("anon_%s@anonymous.local", id.String())
 	// Random password hash (anonymous users never log in with password).
 	pwBytes := make([]byte, 32)

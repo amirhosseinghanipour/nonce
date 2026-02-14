@@ -14,7 +14,7 @@ func RequireAdminSecret(secret string) func(http.Handler) http.Handler {
 			if secret == "" {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
-				_, _ = w.Write([]byte(`{"error":"admin API not configured (NONCE_ADMIN_SECRET)"}`))
+				_, _ = w.Write([]byte(`{"error":"admin API requires NONCE_ADMIN_SECRET to be set"}`))
 				return
 			}
 			if r.Header.Get(adminSecretHeader) != secret {

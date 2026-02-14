@@ -10,13 +10,13 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// HealthHandler serves /health with DB and optional Redis checks.
+// HealthHandler serves /health and /ready with DB and Redis (if configured) checks.
 type HealthHandler struct {
-	pool *pgxpool.Pool
+	pool  *pgxpool.Pool
 	redis *redis.Client
 }
 
-// NewHealthHandler creates a health handler (redis optional).
+// NewHealthHandler creates a health handler. redis may be nil when Redis is disabled (REDIS_URL empty).
 func NewHealthHandler(pool *pgxpool.Pool, redisClient *redis.Client) *HealthHandler {
 	return &HealthHandler{pool: pool, redis: redisClient}
 }

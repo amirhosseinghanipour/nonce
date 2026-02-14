@@ -21,8 +21,8 @@ type accessClaims struct {
 	jwt.RegisteredClaims
 	ProjectID   string `json:"project_id"`
 	UserID      string `json:"user_id"`
-	OrgID       string `json:"org_id,omitempty"`   // optional; present when token is org-scoped
-	Role        string `json:"role,omitempty"`    // optional; member role in org
+	OrgID       string `json:"org_id,omitempty"`   // present when token is org-scoped
+	Role        string `json:"role,omitempty"`    // member role in org when org-scoped
 	MFAPending  bool   `json:"mfa_pending,omitempty"`
 }
 

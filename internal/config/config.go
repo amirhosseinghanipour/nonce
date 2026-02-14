@@ -62,7 +62,7 @@ type WebAuthnConfig struct {
 	RPID          string   // Relying Party ID (e.g. localhost or your domain)
 	RPOrigins     []string // Allowed origins (e.g. https://app.example.com)
 	RPDisplayName string   // Display name for the RP
-	Timeout       int      // Challenge timeout in ms (optional)
+	Timeout       int      // Challenge timeout in ms; 0 = use default
 }
 
 type PasswordResetConfig struct {
@@ -70,11 +70,11 @@ type PasswordResetConfig struct {
 	ExpirySecs int64  // token TTL (e.g. 3600 = 1 hour)
 }
 
-// EmailVerificationConfig for optional email verification after signup.
+// EmailVerificationConfig for email verification after signup. Enable with Enabled.
 type EmailVerificationConfig struct {
 	BaseURL    string // e.g. https://app.example.com/verify-email (link in email)
 	ExpirySecs int64  // token TTL (e.g. 86400 = 24h)
-	Enabled    bool   // if true, send verification after signup and optionally guard routes
+	Enabled    bool   // if true, send verification after signup and enforce verified-email where applicable
 }
 
 type OAuthConfig struct {
@@ -95,7 +95,7 @@ type MagicLinkConfig struct {
 }
 
 type RedisConfig struct {
-	URL string // optional; used for Asynq and health check
+	URL string // Redis connection URL; empty = Asynq and Redis health check disabled
 }
 
 type RateLimitConfig struct {

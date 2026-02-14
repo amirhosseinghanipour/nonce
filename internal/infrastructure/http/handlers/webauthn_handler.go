@@ -46,7 +46,7 @@ func NewWebAuthnHandler(svc *webauthnsvc.Service, issuer ports.TokenIssuer, toke
 // RegisterBegin returns creation options and session_id. Requires JWT.
 func (h *WebAuthnHandler) RegisterBegin(w http.ResponseWriter, r *http.Request) {
 	if h.svc == nil {
-		writeErr(w, http.StatusNotImplemented, "", "webauthn not configured")
+		writeErr(w, http.StatusNotImplemented, "", "WebAuthn is disabled")
 		return
 	}
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
@@ -83,7 +83,7 @@ func (h *WebAuthnHandler) RegisterBegin(w http.ResponseWriter, r *http.Request) 
 // RegisterFinish consumes the credential response and stores the passkey. Requires JWT; session_id in header.
 func (h *WebAuthnHandler) RegisterFinish(w http.ResponseWriter, r *http.Request) {
 	if h.svc == nil {
-		writeErr(w, http.StatusNotImplemented, "", "webauthn not configured")
+		writeErr(w, http.StatusNotImplemented, "", "WebAuthn is disabled")
 		return
 	}
 	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
@@ -116,7 +116,7 @@ func (h *WebAuthnHandler) RegisterFinish(w http.ResponseWriter, r *http.Request)
 // LoginBegin returns assertion options and session_id. Requires project key.
 func (h *WebAuthnHandler) LoginBegin(w http.ResponseWriter, r *http.Request) {
 	if h.svc == nil {
-		writeErr(w, http.StatusNotImplemented, "", "webauthn not configured")
+		writeErr(w, http.StatusNotImplemented, "", "WebAuthn is disabled")
 		return
 	}
 	project := middleware.ProjectFromContext(r.Context())
@@ -141,7 +141,7 @@ func (h *WebAuthnHandler) LoginBegin(w http.ResponseWriter, r *http.Request) {
 // LoginFinish validates the assertion and returns access + refresh tokens. Session_id in header; body = assertion response.
 func (h *WebAuthnHandler) LoginFinish(w http.ResponseWriter, r *http.Request) {
 	if h.svc == nil {
-		writeErr(w, http.StatusNotImplemented, "", "webauthn not configured")
+		writeErr(w, http.StatusNotImplemented, "", "WebAuthn is disabled")
 		return
 	}
 	sessionID := r.Header.Get(webauthnSessionHeader)
