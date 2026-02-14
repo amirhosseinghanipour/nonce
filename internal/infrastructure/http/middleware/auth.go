@@ -24,12 +24,12 @@ func (m *AuthValidator) Handler(next http.Handler) http.Handler {
 			return
 		}
 		tokenString := strings.TrimPrefix(auth, "Bearer ")
-		projectID, userID, err := m.issuer.ValidateAccessToken(tokenString)
+		projectID, userID, orgID, role, err := m.issuer.ValidateAccessToken(tokenString)
 		if err != nil {
 			writeErr(w, http.StatusUnauthorized, "invalid token")
 			return
 		}
-		ctx := WithAuth(r.Context(), projectID, userID)
+		ctx := WithAuth(r.Context(), projectID, userID, orgID, role)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

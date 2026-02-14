@@ -21,6 +21,8 @@ type accessClaims struct {
 	jwt.RegisteredClaims
 	ProjectID   string `json:"project_id"`
 	UserID      string `json:"user_id"`
+	OrgID       string `json:"org_id,omitempty"`   // optional; present when token is org-scoped
+	Role        string `json:"role,omitempty"`    // optional; member role in org
 	MFAPending  bool   `json:"mfa_pending,omitempty"`
 }
 
@@ -34,6 +36,14 @@ func NewTokenIssuer(privateKey *rsa.PrivateKey, issuer, audience string) *TokenI
 }
 
 func (t *TokenIssuer) IssueAccessToken(projectID, userID string, expiresInSeconds int64) (string, error) {
+	return t.issueAccessToken(projectID, userID, "", "", expiresInSeconds)
+}
+
+func (t *TokenIssuer) IssueAccessTokenWithOrg(projectID, userID, orgID, role string, expiresInSeconds int64) (string, error) {
+	return t.issueAccessToken(projectID, userID, orgID, role, expiresInSeconds)
+}
+
+func (t *TokenIssuer) issueAccessToken(projectID, userID, orgID, role string, expiresInSeconds int64) (string, error) {
 	now := time.Now()
 	claims := accessClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -45,20 +55,22 @@ func (t *TokenIssuer) IssueAccessToken(projectID, userID string, expiresInSecond
 		},
 		ProjectID: projectID,
 		UserID:    userID,
+		OrgID:     orgID,
+		Role:      role,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	return token.SignedString(t.privateKey)
 }
 
-func (t *TokenIssuer) ValidateAccessToken(tokenString string) (projectID, userID string, err error) {
-	projectID, userID, mfaPending, err := t.parseClaims(tokenString)
+func (t *TokenIssuer) ValidateAccessToken(tokenString string) (projectID, userID, orgID, role string, err error) {
+	projectID, userID, orgID, role, mfaPending, err := t.parseClaims(tokenString)
 	if err != nil {
-		return "", "", err
+		return "", "", "", "", err
 	}
 	if mfaPending {
-		return "", "", errors.New("token is MFA pending; complete MFA first")
+		return "", "", "", "", errors.New("token is MFA pending; complete MFA first")
 	}
-	return projectID, userID, nil
+	return projectID, userID, orgID, role, nil
 }
 
 func (t *TokenIssuer) IssueMFAPendingToken(projectID, userID string, expiresInSeconds int64) (string, error) {
@@ -80,7 +92,7 @@ func (t *TokenIssuer) IssueMFAPendingToken(projectID, userID string, expiresInSe
 }
 
 func (t *TokenIssuer) ValidateMFAPendingToken(tokenString string) (projectID, userID string, err error) {
-	projectID, userID, mfaPending, err := t.parseClaims(tokenString)
+	projectID, userID, _, _, mfaPending, err := t.parseClaims(tokenString)
 	if err != nil {
 		return "", "", err
 	}
@@ -90,7 +102,7 @@ func (t *TokenIssuer) ValidateMFAPendingToken(tokenString string) (projectID, us
 	return projectID, userID, nil
 }
 
-func (t *TokenIssuer) parseClaims(tokenString string) (projectID, userID string, mfaPending bool, err error) {
+func (t *TokenIssuer) parseClaims(tokenString string) (projectID, userID, orgID, role string, mfaPending bool, err error) {
 	token, err := jwt.ParseWithClaims(tokenString, &accessClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -98,11 +110,11 @@ func (t *TokenIssuer) parseClaims(tokenString string) (projectID, userID string,
 		return t.publicKey, nil
 	})
 	if err != nil {
-		return "", "", false, err
+		return "", "", "", "", false, err
 	}
 	claims, ok := token.Claims.(*accessClaims)
 	if !ok || !token.Valid {
-		return "", "", false, errors.New("invalid token claims")
+		return "", "", "", "", false, errors.New("invalid token claims")
 	}
-	return claims.ProjectID, claims.UserID, claims.MFAPending, nil
+	return claims.ProjectID, claims.UserID, claims.OrgID, claims.Role, claims.MFAPending, nil
 }

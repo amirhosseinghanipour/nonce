@@ -37,6 +37,20 @@ type ProjectRepository interface {
 	UpdateAPIKeyHash(ctx context.Context, projectID domain.ProjectID, apiKeyHash string) error
 }
 
+// OrganizationRepository defines persistence for organizations and members (project-scoped, org-first model).
+type OrganizationRepository interface {
+	Create(ctx context.Context, org *domain.Organization) error
+	GetByID(ctx context.Context, projectID domain.ProjectID, orgID domain.OrganizationID) (*domain.Organization, error)
+	ListByProject(ctx context.Context, projectID domain.ProjectID, limit, offset int) ([]*domain.Organization, error)
+	ListForUser(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) ([]*domain.Organization, error)
+	UpdateName(ctx context.Context, projectID domain.ProjectID, orgID domain.OrganizationID, name string) error
+	AddMember(ctx context.Context, orgID domain.OrganizationID, userID domain.UserID, role string) error
+	RemoveMember(ctx context.Context, orgID domain.OrganizationID, userID domain.UserID) error
+	GetMember(ctx context.Context, orgID domain.OrganizationID, userID domain.UserID) (*domain.OrganizationMember, error)
+	GetUserRole(ctx context.Context, orgID domain.OrganizationID, userID domain.UserID) (string, error)
+	ListMembers(ctx context.Context, orgID domain.OrganizationID) ([]*domain.OrganizationMember, error)
+}
+
 // RefreshTokenInfo is returned by GetRefreshToken for reuse detection and rotation.
 type RefreshTokenInfo struct {
 	ProjectID domain.ProjectID

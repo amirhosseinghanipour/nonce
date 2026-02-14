@@ -33,12 +33,18 @@ type AuthHandler struct {
 	verifyMFA               *auth.VerifyMFA
 	userRepo                ports.UserRepository
 	tokenStore              ports.TokenStore
+	orgRepo                 ports.OrganizationRepository
+	issuer                  ports.TokenIssuer
+	accessExp               int64
 	sendVerificationOnSignup bool // if true, send verification email after signup
 	validate                *validator.Validate
 	log                     zerolog.Logger
 }
 
-func NewAuthHandler(register *auth.RegisterUser, login *auth.Login, refresh *auth.Refresh, sendMagicLink *auth.SendMagicLink, verifyMagicLink *auth.VerifyMagicLink, forgotPassword *auth.ForgotPassword, resetPassword *auth.ResetPassword, sendEmailVerification *auth.SendEmailVerification, verifyEmail *auth.VerifyEmail, signInAnonymous *auth.SignInAnonymous, sendVerificationOnSignup bool, issueTOTP *auth.IssueTOTP, verifyTOTP *auth.VerifyTOTP, verifyMFA *auth.VerifyMFA, userRepo ports.UserRepository, tokenStore ports.TokenStore, log zerolog.Logger) *AuthHandler {
+func NewAuthHandler(register *auth.RegisterUser, login *auth.Login, refresh *auth.Refresh, sendMagicLink *auth.SendMagicLink, verifyMagicLink *auth.VerifyMagicLink, forgotPassword *auth.ForgotPassword, resetPassword *auth.ResetPassword, sendEmailVerification *auth.SendEmailVerification, verifyEmail *auth.VerifyEmail, signInAnonymous *auth.SignInAnonymous, sendVerificationOnSignup bool, issueTOTP *auth.IssueTOTP, verifyTOTP *auth.VerifyTOTP, verifyMFA *auth.VerifyMFA, userRepo ports.UserRepository, tokenStore ports.TokenStore, orgRepo ports.OrganizationRepository, issuer ports.TokenIssuer, accessExp int64, log zerolog.Logger) *AuthHandler {
+	if accessExp <= 0 {
+		accessExp = 900
+	}
 	return &AuthHandler{
 		register:                register,
 		login:                   login,
@@ -52,6 +58,9 @@ func NewAuthHandler(register *auth.RegisterUser, login *auth.Login, refresh *aut
 		signInAnonymous:         signInAnonymous,
 		userRepo:                userRepo,
 		tokenStore:              tokenStore,
+		orgRepo:                 orgRepo,
+		issuer:                  issuer,
+		accessExp:               accessExp,
 		sendVerificationOnSignup: sendVerificationOnSignup,
 		validate:                validator.New(),
 		log:                     log,
@@ -263,6 +272,68 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// SwitchOrg issues a new access token with org context (org_id, role) so subsequent requests are org-scoped. Requires JWT.
+func (h *AuthHandler) SwitchOrg(w http.ResponseWriter, r *http.Request) {
+	if h.orgRepo == nil || h.issuer == nil {
+		writeErr(w, http.StatusNotImplemented, "organizations not configured")
+		return
+	}
+	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
+	if projectIDStr == "" || userIDStr == "" {
+		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		OrganizationID string `json:"organization_id" validate:"required"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if err := h.validate.Struct(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	_, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid project id")
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	orgID, err := uuid.Parse(body.OrganizationID)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid organization_id")
+		return
+	}
+	oid := domain.NewOrganizationID(orgID)
+	uid := domain.NewUserID(userID)
+	role, err := h.orgRepo.GetUserRole(r.Context(), oid, uid)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if role == "" {
+		writeErr(w, http.StatusForbidden, "not a member of this organization")
+		return
+	}
+	accessToken, err := h.issuer.IssueAccessTokenWithOrg(projectIDStr, userIDStr, orgID.String(), role, h.accessExp)
+	if err != nil {
+		h.log.Error().Err(err).Msg("issue org-scoped token failed")
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"access_token": accessToken,
+		"expires_in":   h.accessExp,
+		"org_id":       orgID.String(),
+		"role":         role,
+	})
+}
+
 func (h *AuthHandler) SendMagicLink(w http.ResponseWriter, r *http.Request) {
 	if h.sendMagicLink == nil {
 		writeErr(w, http.StatusNotImplemented, "magic link not configured")
@@ -425,7 +496,7 @@ func (h *AuthHandler) SendVerificationEmail(w http.ResponseWriter, r *http.Reque
 		writeErr(w, http.StatusNotImplemented, "email verification not configured")
 		return
 	}
-	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -487,7 +558,7 @@ func (h *AuthHandler) TOTPSetup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotImplemented, "totp not configured")
 		return
 	}
-	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -544,7 +615,7 @@ func (h *AuthHandler) TOTPVerify(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotImplemented, "totp not configured")
 		return
 	}
-	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
 		return

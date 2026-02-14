@@ -68,6 +68,7 @@ func main() {
 	userRepo := postgres.NewUserRepository(queries, pool, cfg.RLS.Enabled)
 	projectRepo := postgres.NewProjectRepository(queries)
 	tokenStore := postgres.NewTokenStore(queries, pool)
+	orgRepo := postgres.NewOrganizationRepository(queries, pool)
 	magicLinkStore := postgres.NewMagicLinkRepository(queries, pool)
 
 	var taskEnqueuer ports.TaskEnqueuer
@@ -161,15 +162,17 @@ func main() {
 	}
 	secureMiddleware := middleware.NewSecure(middleware.SecureOptions(cfg.Secure.IsDevelopment))
 
-	authHandler := handlers.NewAuthHandler(registerUC, loginUC, refreshUC, sendMagicLinkUC, verifyMagicLinkUC, forgotPasswordUC, resetPasswordUC, sendEmailVerificationUC, verifyEmailUC, signInAnonymousUC, cfg.EmailVerification.Enabled, issueTOTPUC, verifyTOTPUC, verifyMFAUC, userRepo, tokenStore, log)
+	authHandler := handlers.NewAuthHandler(registerUC, loginUC, refreshUC, sendMagicLinkUC, verifyMagicLinkUC, forgotPasswordUC, resetPasswordUC, sendEmailVerificationUC, verifyEmailUC, signInAnonymousUC, cfg.EmailVerification.Enabled, issueTOTPUC, verifyTOTPUC, verifyMFAUC, userRepo, tokenStore, orgRepo, issuer, cfg.JWT.AccessExpiry, log)
 	usersHandler := handlers.NewUsersHandler(userRepo, tokenStore)
+	organizationsHandler := handlers.NewOrganizationsHandler(orgRepo)
 	requireJWT := middleware.NewAuthValidator(issuer).Handler
 	router := httprouter.NewRouter(httprouter.RouterConfig{
-		AuthHandler:      authHandler,
-		HealthHandler:     healthHandler,
-		UsersHandler:      usersHandler,
-		WebAuthnHandler:   webauthnHandler,
-		AdminHandler:      adminHandler,
+		AuthHandler:         authHandler,
+		HealthHandler:       healthHandler,
+		UsersHandler:        usersHandler,
+		OrganizationsHandler: organizationsHandler,
+		WebAuthnHandler:     webauthnHandler,
+		AdminHandler:        adminHandler,
 		Tenant:            tenantResolver,
 		RequireJWT:        requireJWT,
 		RequireAdmin:      requireAdmin,

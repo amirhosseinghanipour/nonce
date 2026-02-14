@@ -45,7 +45,7 @@ type ExportMeResponse struct {
 
 // Me returns the current user from the JWT. Requires AuthValidator middleware.
 func (h *UsersHandler) Me(w http.ResponseWriter, r *http.Request) {
-	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -96,7 +96,7 @@ func (h *UsersHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 // DeleteMe soft-deletes the current user (GDPR right to erasure) and revokes all their sessions. Requires JWT.
 func (h *UsersHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
-	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -128,7 +128,7 @@ const maxListLimit = 100
 
 // List returns project-scoped users with optional limit/offset. Requires JWT (project from token).
 func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
-	projectIDStr, _ := middleware.AuthFromContext(r.Context())
+	projectIDStr, _, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -191,7 +191,7 @@ type UpdateMeRequest struct {
 
 // UpdateMe merges the request user_metadata into the current user's user_metadata and saves. Requires JWT.
 func (h *UsersHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
-	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -270,7 +270,7 @@ func (h *UsersHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 
 // ExportMe returns the current user's data for GDPR/right-to-data-portability. Requires JWT.
 func (h *UsersHandler) ExportMe(w http.ResponseWriter, r *http.Request) {
-	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
 		return

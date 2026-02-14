@@ -6,10 +6,13 @@ type PasswordHasher interface {
 	Verify(password, hash string) bool
 }
 
-// TokenIssuer signs and validates JWTs (RS256).
+// TokenIssuer signs and validates JWTs (RS256). Org-scoped tokens include org_id and role.
 type TokenIssuer interface {
 	IssueAccessToken(projectID, userID string, expiresInSeconds int64) (string, error)
-	ValidateAccessToken(tokenString string) (projectID, userID string, err error)
+	// IssueAccessTokenWithOrg issues a token with org context (org_id, role) for org-scoped access.
+	IssueAccessTokenWithOrg(projectID, userID, orgID, role string, expiresInSeconds int64) (string, error)
+	// ValidateAccessToken returns projectID, userID, and optionally orgID, role (empty if not org-scoped).
+	ValidateAccessToken(tokenString string) (projectID, userID, orgID, role string, err error)
 	IssueMFAPendingToken(projectID, userID string, expiresInSeconds int64) (string, error)
 	ValidateMFAPendingToken(tokenString string) (projectID, userID string, err error)
 }

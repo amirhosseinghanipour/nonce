@@ -49,7 +49,7 @@ func (h *WebAuthnHandler) RegisterBegin(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusNotImplemented, "webauthn not configured")
 		return
 	}
-	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -86,7 +86,7 @@ func (h *WebAuthnHandler) RegisterFinish(w http.ResponseWriter, r *http.Request)
 		writeErr(w, http.StatusNotImplemented, "webauthn not configured")
 		return
 	}
-	projectIDStr, userIDStr := middleware.AuthFromContext(r.Context())
+	projectIDStr, userIDStr, _, _ := middleware.AuthFromContext(r.Context())
 	if projectIDStr == "" || userIDStr == "" {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
 		return

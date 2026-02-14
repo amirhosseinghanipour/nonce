@@ -12,21 +12,30 @@ import (
 )
 
 type Querier interface {
+	AddOrganizationMember(ctx context.Context, arg AddOrganizationMemberParams) (OrganizationMember, error)
 	AnonymizeUser(ctx context.Context, arg AnonymizeUserParams) error
+	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
 	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteExpiredRefreshTokens(ctx context.Context) error
+	GetOrganizationByID(ctx context.Context, arg GetOrganizationByIDParams) (Organization, error)
+	GetOrganizationMember(ctx context.Context, arg GetOrganizationMemberParams) (OrganizationMember, error)
 	GetProjectByAPIKeyHash(ctx context.Context, apiKeyHash string) (Project, error)
 	GetProjectByID(ctx context.Context, id uuid.UUID) (Project, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetSessionByID(ctx context.Context, id uuid.UUID) (Session, error)
 	GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error)
 	GetUserByID(ctx context.Context, arg GetUserByIDParams) (User, error)
+	GetUserRoleInOrganization(ctx context.Context, arg GetUserRoleInOrganizationParams) (string, error)
 	GetUsersDeletedBefore(ctx context.Context, deletedAt pgtype.Timestamptz) ([]GetUsersDeletedBeforeRow, error)
 	HardDeleteUser(ctx context.Context, arg HardDeleteUserParams) error
+	ListOrganizationMembers(ctx context.Context, organizationID uuid.UUID) ([]OrganizationMember, error)
+	ListOrganizationsByProjectID(ctx context.Context, arg ListOrganizationsByProjectIDParams) ([]Organization, error)
+	ListOrganizationsForUser(ctx context.Context, arg ListOrganizationsForUserParams) ([]Organization, error)
 	ListUsersByProjectID(ctx context.Context, arg ListUsersByProjectIDParams) ([]User, error)
+	RemoveOrganizationMember(ctx context.Context, arg RemoveOrganizationMemberParams) error
 	RevokeAllRefreshTokensInSession(ctx context.Context, sessionID uuid.UUID) error
 	RevokeRefreshTokensByUserSessions(ctx context.Context, arg RevokeRefreshTokensByUserSessionsParams) error
 	RevokeSessionByID(ctx context.Context, arg RevokeSessionByIDParams) error
@@ -34,6 +43,7 @@ type Querier interface {
 	SetRefreshTokenRevoked(ctx context.Context, id uuid.UUID) error
 	SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) error
 	UpdateAppMetadata(ctx context.Context, arg UpdateAppMetadataParams) error
+	UpdateOrganizationName(ctx context.Context, arg UpdateOrganizationNameParams) error
 	UpdateProjectAPIKeyHash(ctx context.Context, arg UpdateProjectAPIKeyHashParams) error
 	UpdateUserMetadata(ctx context.Context, arg UpdateUserMetadataParams) error
 }

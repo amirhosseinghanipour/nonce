@@ -22,6 +22,21 @@ CREATE TABLE users (
     UNIQUE(project_id, email)
 );
 
+CREATE TABLE organizations (
+    id UUID PRIMARY KEY,
+    project_id UUID NOT NULL REFERENCES projects(id),
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE organization_members (
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (organization_id, user_id)
+);
+
 CREATE TABLE sessions (
     id UUID PRIMARY KEY,
     project_id UUID NOT NULL REFERENCES projects(id),

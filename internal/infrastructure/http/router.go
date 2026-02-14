@@ -13,12 +13,13 @@ import (
 )
 
 type RouterConfig struct {
-	AuthHandler       *handlers.AuthHandler
-	HealthHandler     *handlers.HealthHandler
-	UsersHandler      *handlers.UsersHandler
-	WebAuthnHandler   *handlers.WebAuthnHandler
-	AdminHandler      *handlers.AdminHandler
-	Tenant            *middleware.TenantResolver
+	AuthHandler        *handlers.AuthHandler
+	HealthHandler      *handlers.HealthHandler
+	UsersHandler       *handlers.UsersHandler
+	OrganizationsHandler *handlers.OrganizationsHandler
+	WebAuthnHandler    *handlers.WebAuthnHandler
+	AdminHandler       *handlers.AdminHandler
+	Tenant             *middleware.TenantResolver
 	RequireJWT        func(http.Handler) http.Handler // JWT auth for /users/* etc.
 	RequireAdmin      func(http.Handler) http.Handler // X-Nonce-Admin-Secret for /admin/*
 	OAuthBegin        http.HandlerFunc                 // GET /auth/:provider (tenant required)
@@ -96,6 +97,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		if cfg.RequireJWT != nil {
 			r.Group(func(r chi.Router) {
 				r.Use(cfg.RequireJWT)
+				r.Post("/switch-org", cfg.AuthHandler.SwitchOrg)
 				r.Post("/send-verification-email", cfg.AuthHandler.SendVerificationEmail)
 				r.Post("/mfa/totp/setup", cfg.AuthHandler.TOTPSetup)
 				r.Post("/mfa/totp/verify", cfg.AuthHandler.TOTPVerify)
@@ -106,6 +108,19 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			})
 		}
 	})
+
+	if cfg.OrganizationsHandler != nil && cfg.RequireJWT != nil {
+		r.Route("/organizations", func(r chi.Router) {
+			r.Use(cfg.RequireJWT)
+			r.Get("/", cfg.OrganizationsHandler.List)
+			r.Post("/", cfg.OrganizationsHandler.Create)
+			r.Get("/{id}", cfg.OrganizationsHandler.Get)
+			r.Patch("/{id}", cfg.OrganizationsHandler.UpdateName)
+			r.Get("/{id}/members", cfg.OrganizationsHandler.ListMembers)
+			r.Post("/{id}/members", cfg.OrganizationsHandler.AddMember)
+			r.Delete("/{id}/members/{user_id}", cfg.OrganizationsHandler.RemoveMember)
+		})
+	}
 
 	if cfg.UsersHandler != nil && cfg.RequireJWT != nil {
 		r.Route("/users", func(r chi.Router) {
