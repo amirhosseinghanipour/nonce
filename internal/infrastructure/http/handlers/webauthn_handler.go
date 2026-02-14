@@ -178,8 +178,15 @@ func (h *WebAuthnHandler) LoginFinish(w http.ResponseWriter, r *http.Request) {
 	refreshRaw := make([]byte, 32)
 	rand.Read(refreshRaw)
 	refreshToken := hex.EncodeToString(refreshRaw)
+	refreshHash := refreshTokenHashForLookup(refreshToken)
 	expiresAt := time.Now().Add(time.Duration(h.refreshExp) * time.Second).Unix()
-	if err := h.tokenStore.StoreRefreshToken(r.Context(), projectID, userID, nil, refreshToken, expiresAt); err != nil {
+	authSessionID, err := h.tokenStore.CreateSession(r.Context(), projectID, userID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("create session failed")
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if err := h.tokenStore.StoreRefreshToken(r.Context(), projectID, userID, authSessionID, nil, refreshHash, expiresAt); err != nil {
 		h.log.Error().Err(err).Msg("store refresh token failed")
 		writeErr(w, http.StatusInternalServerError, "internal error")
 		return

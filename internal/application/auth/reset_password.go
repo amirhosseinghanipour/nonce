@@ -16,18 +16,20 @@ type ResetPasswordInput struct {
 // ResetPasswordResult returns nothing on success.
 type ResetPasswordResult struct{}
 
-// ResetPassword looks up the reset token, finds the user, updates password, and marks token used.
+// ResetPassword looks up the reset token, finds the user, updates password, revokes all sessions, and marks token used.
 type ResetPassword struct {
-	resetStore ports.PasswordResetStore
+	resetStore  ports.PasswordResetStore
 	userRepo   ports.UserRepository
+	tokenStore ports.TokenStore
 	hasher     ports.PasswordHasher
 }
 
 // NewResetPassword builds the use case.
-func NewResetPassword(resetStore ports.PasswordResetStore, userRepo ports.UserRepository, hasher ports.PasswordHasher) *ResetPassword {
+func NewResetPassword(resetStore ports.PasswordResetStore, userRepo ports.UserRepository, tokenStore ports.TokenStore, hasher ports.PasswordHasher) *ResetPassword {
 	return &ResetPassword{
-		resetStore: resetStore,
+		resetStore:  resetStore,
 		userRepo:   userRepo,
+		tokenStore: tokenStore,
 		hasher:     hasher,
 	}
 }
@@ -49,6 +51,9 @@ func (uc *ResetPassword) Execute(ctx context.Context, input ResetPasswordInput) 
 	}
 	if err := uc.userRepo.UpdatePassword(ctx, projectID, user.ID, newHash); err != nil {
 		return nil, err
+	}
+	if uc.tokenStore != nil {
+		_ = uc.tokenStore.RevokeAllSessionsForUser(ctx, projectID, user.ID, ports.RevokedReasonPasswordChange)
 	}
 	if err := uc.resetStore.MarkUsed(ctx, hash); err != nil {
 		return nil, err

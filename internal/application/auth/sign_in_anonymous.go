@@ -86,7 +86,11 @@ func (uc *SignInAnonymous) Execute(ctx context.Context, input SignInAnonymousInp
 	refreshToken := hex.EncodeToString(refreshRaw)
 	refreshHash := hashForStorage(refreshToken)
 	expiresAt := time.Now().Add(time.Duration(uc.refreshExp) * time.Second).Unix()
-	if err := uc.tokenStore.StoreRefreshToken(ctx, input.ProjectID, user.ID, nil, refreshHash, expiresAt); err != nil {
+	sessionID, err := uc.tokenStore.CreateSession(ctx, input.ProjectID, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := uc.tokenStore.StoreRefreshToken(ctx, input.ProjectID, user.ID, sessionID, nil, refreshHash, expiresAt); err != nil {
 		return nil, err
 	}
 	return &SignInAnonymousResult{

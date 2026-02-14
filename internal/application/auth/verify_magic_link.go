@@ -106,8 +106,13 @@ func (uc *VerifyMagicLink) Execute(ctx context.Context, input VerifyMagicLinkInp
 	refreshRaw := make([]byte, 32)
 	rand.Read(refreshRaw)
 	refreshToken := hex.EncodeToString(refreshRaw)
+	refreshHash := hashForStorage(refreshToken)
 	expiresAt := time.Now().Add(time.Duration(uc.refreshExp) * time.Second).Unix()
-	if err := uc.tokenStore.StoreRefreshToken(ctx, projectID, user.ID, nil, refreshToken, expiresAt); err != nil {
+	sessionID, err := uc.tokenStore.CreateSession(ctx, projectID, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := uc.tokenStore.StoreRefreshToken(ctx, projectID, user.ID, sessionID, nil, refreshHash, expiresAt); err != nil {
 		return nil, err
 	}
 

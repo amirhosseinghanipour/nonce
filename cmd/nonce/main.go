@@ -124,7 +124,7 @@ func main() {
 	verifyMagicLinkUC := auth.NewVerifyMagicLink(magicLinkStore, userRepo, hasher, issuer, tokenStore, cfg.JWT.AccessExpiry, cfg.JWT.RefreshExpiry)
 	passwordResetStore := postgres.NewPasswordResetRepository(queries, pool)
 	forgotPasswordUC := auth.NewForgotPassword(passwordResetStore, userRepo, taskEnqueuer, cfg.PasswordReset.BaseURL, cfg.PasswordReset.ExpirySecs)
-	resetPasswordUC := auth.NewResetPassword(passwordResetStore, userRepo, hasher)
+	resetPasswordUC := auth.NewResetPassword(passwordResetStore, userRepo, tokenStore, hasher)
 	emailVerificationStore := postgres.NewEmailVerificationRepository(queries, pool)
 	sendEmailVerificationUC := auth.NewSendEmailVerification(emailVerificationStore, userRepo, taskEnqueuer, cfg.EmailVerification.BaseURL, cfg.EmailVerification.ExpirySecs)
 	verifyEmailUC := auth.NewVerifyEmail(emailVerificationStore, userRepo)

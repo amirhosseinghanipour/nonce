@@ -51,9 +51,9 @@ func (uc *Refresh) Execute(ctx context.Context, input RefreshInput) (*RefreshRes
 	if err != nil {
 		return nil, errors.ErrInvalidToken
 	}
-	// Reuse detection: token was already rotated (used once before).
+	// Reuse detection: token was already rotated (used once before). Revoke entire session.
 	if info.RevokedAt != nil {
-		_ = uc.tokenStore.RevokeTokenAndDescendants(ctx, info.TokenID)
+		_ = uc.tokenStore.RevokeSession(ctx, info.SessionID, ports.RevokedReasonSuspiciousActivity)
 		return nil, errors.ErrRefreshTokenReuse
 	}
 	if time.Now().After(info.ExpiresAt) {
@@ -74,7 +74,7 @@ func (uc *Refresh) Execute(ctx context.Context, input RefreshInput) (*RefreshRes
 	newRefresh := hex.EncodeToString(newRefreshRaw)
 	expiresAt := time.Now().Add(time.Duration(uc.refreshExp) * time.Second).Unix()
 	parentID := info.TokenID
-	if err := uc.tokenStore.StoreRefreshToken(ctx, info.ProjectID, info.UserID, &parentID, hashForStorage(newRefresh), expiresAt); err != nil {
+	if err := uc.tokenStore.StoreRefreshToken(ctx, info.ProjectID, info.UserID, info.SessionID, &parentID, hashForStorage(newRefresh), expiresAt); err != nil {
 		return nil, err
 	}
 	return &RefreshResult{

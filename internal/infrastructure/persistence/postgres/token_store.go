@@ -33,7 +33,25 @@ func NewTokenStore(q *db.Queries, pool *pgxpool.Pool) *TokenStore {
 	return &TokenStore{q: q, pool: pool}
 }
 
-func (s *TokenStore) StoreRefreshToken(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, parentTokenID *string, tokenHash string, expiresAt int64) error {
+func (s *TokenStore) CreateSession(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) (string, error) {
+	id := uuid.New()
+	_, err := s.q.CreateSession(ctx, db.CreateSessionParams{
+		ID:        id,
+		ProjectID: projectID.UUID,
+		UserID:    userID.UUID,
+		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		return "", err
+	}
+	return id.String(), nil
+}
+
+func (s *TokenStore) StoreRefreshToken(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, sessionID string, parentTokenID *string, tokenHash string, expiresAt int64) error {
+	sessionUUID, err := uuid.Parse(sessionID)
+	if err != nil {
+		return err
+	}
 	var parentID pgtype.UUID
 	if parentTokenID != nil && *parentTokenID != "" {
 		if id, err := uuid.Parse(*parentTokenID); err == nil {
@@ -42,10 +60,11 @@ func (s *TokenStore) StoreRefreshToken(ctx context.Context, projectID domain.Pro
 			parentID = pgtype.UUID{Bytes: b, Valid: true}
 		}
 	}
-	_, err := s.q.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
+	_, err = s.q.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
 		ID:        uuid.New(),
 		ProjectID: projectID.UUID,
 		UserID:    userID.UUID,
+		SessionID: sessionUUID,
 		TokenHash: tokenHash,
 		ExpiresAt: time.Unix(expiresAt, 0),
 		CreatedAt: time.Now(),
@@ -65,6 +84,7 @@ func (s *TokenStore) GetRefreshToken(ctx context.Context, tokenHash string) (*po
 	info := &ports.RefreshTokenInfo{
 		ProjectID: domain.NewProjectID(r.ProjectID),
 		UserID:    domain.NewUserID(r.UserID),
+		SessionID: r.SessionID.String(),
 		TokenID:   r.ID.String(),
 		ExpiresAt: r.ExpiresAt,
 	}
@@ -101,6 +121,34 @@ func (s *TokenStore) RevokeRefreshToken(ctx context.Context, tokenHash string) e
 		return err
 	}
 	return s.MarkTokenRotated(ctx, info.TokenID)
+}
+
+func (s *TokenStore) RevokeSession(ctx context.Context, sessionID string, reason string) error {
+	id, err := uuid.Parse(sessionID)
+	if err != nil {
+		return err
+	}
+	if err := s.q.RevokeAllRefreshTokensInSession(ctx, id); err != nil {
+		return err
+	}
+	return s.q.RevokeSessionByID(ctx, db.RevokeSessionByIDParams{
+		ID:            id,
+		RevokedReason: pgtype.Text{String: reason, Valid: reason != ""},
+	})
+}
+
+func (s *TokenStore) RevokeAllSessionsForUser(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, reason string) error {
+	if err := s.q.RevokeRefreshTokensByUserSessions(ctx, db.RevokeRefreshTokensByUserSessionsParams{
+		ProjectID: projectID.UUID,
+		UserID:    userID.UUID,
+	}); err != nil {
+		return err
+	}
+	return s.q.RevokeSessionsByUser(ctx, db.RevokeSessionsByUserParams{
+		ProjectID:     projectID.UUID,
+		UserID:        userID.UUID,
+		RevokedReason: pgtype.Text{String: reason, Valid: reason != ""},
+	})
 }
 
 // Ensure TokenStore implements ports.TokenStore.

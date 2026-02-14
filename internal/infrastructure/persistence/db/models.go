@@ -23,11 +23,21 @@ type RefreshToken struct {
 	ID        uuid.UUID          `json:"id"`
 	ProjectID uuid.UUID          `json:"project_id"`
 	UserID    uuid.UUID          `json:"user_id"`
+	SessionID uuid.UUID          `json:"session_id"`
 	TokenHash string             `json:"token_hash"`
 	ExpiresAt time.Time          `json:"expires_at"`
 	CreatedAt time.Time          `json:"created_at"`
 	ParentID  pgtype.UUID        `json:"parent_id"`
 	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+}
+
+type Session struct {
+	ID            uuid.UUID          `json:"id"`
+	ProjectID     uuid.UUID          `json:"project_id"`
+	UserID        uuid.UUID          `json:"user_id"`
+	CreatedAt     time.Time          `json:"created_at"`
+	RevokedAt     pgtype.Timestamptz `json:"revoked_at"`
+	RevokedReason pgtype.Text        `json:"revoked_reason"`
 }
 
 type User struct {

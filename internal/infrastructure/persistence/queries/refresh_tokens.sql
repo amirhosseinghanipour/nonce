@@ -1,10 +1,10 @@
 -- name: CreateRefreshToken :one
-INSERT INTO refresh_tokens (id, project_id, user_id, token_hash, expires_at, created_at, parent_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, project_id, user_id, token_hash, expires_at, created_at, parent_id, revoked_at;
+INSERT INTO refresh_tokens (id, project_id, user_id, session_id, token_hash, expires_at, created_at, parent_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, project_id, user_id, session_id, token_hash, expires_at, created_at, parent_id, revoked_at;
 
 -- name: GetRefreshTokenByHash :one
-SELECT id, project_id, user_id, token_hash, expires_at, created_at, parent_id, revoked_at
+SELECT id, project_id, user_id, session_id, token_hash, expires_at, created_at, parent_id, revoked_at
 FROM refresh_tokens
 WHERE token_hash = $1;
 

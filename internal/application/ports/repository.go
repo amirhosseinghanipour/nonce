@@ -31,18 +31,30 @@ type ProjectRepository interface {
 type RefreshTokenInfo struct {
 	ProjectID domain.ProjectID
 	UserID    domain.UserID
+	SessionID string // UUID of the sessions row (device/session)
 	TokenID   string // UUID of the refresh_tokens row
 	RevokedAt *time.Time
 	ExpiresAt time.Time
 }
 
-// TokenStore defines storage for refresh tokens (Redis or DB).
+// Session revoke reasons (for sessions.revoked_reason).
+const (
+	RevokedReasonAdmin             = "admin"
+	RevokedReasonPasswordChange    = "password_change"
+	RevokedReasonMFAReset          = "mfa_reset"
+	RevokedReasonSuspiciousActivity = "suspicious_activity"
+)
+
+// TokenStore defines storage for sessions and refresh tokens.
 type TokenStore interface {
-	StoreRefreshToken(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, parentTokenID *string, tokenHash string, expiresAt int64) error
+	CreateSession(ctx context.Context, projectID domain.ProjectID, userID domain.UserID) (sessionID string, err error)
+	StoreRefreshToken(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, sessionID string, parentTokenID *string, tokenHash string, expiresAt int64) error
 	GetRefreshToken(ctx context.Context, tokenHash string) (*RefreshTokenInfo, error)
 	MarkTokenRotated(ctx context.Context, tokenID string) error
 	RevokeTokenAndDescendants(ctx context.Context, tokenID string) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
+	RevokeSession(ctx context.Context, sessionID string, reason string) error
+	RevokeAllSessionsForUser(ctx context.Context, projectID domain.ProjectID, userID domain.UserID, reason string) error
 }
 
 // MagicLinkStore defines storage for passwordless magic links.

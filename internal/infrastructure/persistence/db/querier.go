@@ -13,14 +13,20 @@ import (
 type Querier interface {
 	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
+	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteExpiredRefreshTokens(ctx context.Context) error
 	GetProjectByAPIKeyHash(ctx context.Context, apiKeyHash string) (Project, error)
 	GetProjectByID(ctx context.Context, id uuid.UUID) (Project, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
+	GetSessionByID(ctx context.Context, id uuid.UUID) (Session, error)
 	GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error)
 	GetUserByID(ctx context.Context, arg GetUserByIDParams) (User, error)
 	ListUsersByProjectID(ctx context.Context, arg ListUsersByProjectIDParams) ([]User, error)
+	RevokeAllRefreshTokensInSession(ctx context.Context, sessionID uuid.UUID) error
+	RevokeRefreshTokensByUserSessions(ctx context.Context, arg RevokeRefreshTokensByUserSessionsParams) error
+	RevokeSessionByID(ctx context.Context, arg RevokeSessionByIDParams) error
+	RevokeSessionsByUser(ctx context.Context, arg RevokeSessionsByUserParams) error
 	SetRefreshTokenRevoked(ctx context.Context, id uuid.UUID) error
 	UpdateAppMetadata(ctx context.Context, arg UpdateAppMetadataParams) error
 	UpdateProjectAPIKeyHash(ctx context.Context, arg UpdateProjectAPIKeyHashParams) error

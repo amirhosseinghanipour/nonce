@@ -21,10 +21,20 @@ CREATE TABLE users (
     UNIQUE(project_id, email)
 );
 
+CREATE TABLE sessions (
+    id UUID PRIMARY KEY,
+    project_id UUID NOT NULL REFERENCES projects(id),
+    user_id UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+    revoked_reason TEXT
+);
+
 CREATE TABLE refresh_tokens (
     id UUID PRIMARY KEY,
     project_id UUID NOT NULL REFERENCES projects(id),
     user_id UUID NOT NULL REFERENCES users(id),
+    session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     token_hash TEXT NOT NULL UNIQUE,
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,

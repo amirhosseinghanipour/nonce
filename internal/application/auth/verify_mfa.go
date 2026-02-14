@@ -81,7 +81,11 @@ func (uc *VerifyMFA) Execute(ctx context.Context, input VerifyMFAInput) (*Verify
 	refreshToken := hex.EncodeToString(refreshRaw)
 	refreshHash := hashForStorage(refreshToken)
 	expiresAt := time.Now().Add(time.Duration(uc.refreshExp) * time.Second).Unix()
-	if err := uc.tokenStore.StoreRefreshToken(ctx, pid, uid, nil, refreshHash, expiresAt); err != nil {
+	sessionID, err := uc.tokenStore.CreateSession(ctx, pid, uid)
+	if err != nil {
+		return nil, err
+	}
+	if err := uc.tokenStore.StoreRefreshToken(ctx, pid, uid, sessionID, nil, refreshHash, expiresAt); err != nil {
 		return nil, err
 	}
 	return &VerifyMFAResult{
